@@ -1,4 +1,4 @@
-package io.openems.edge.io.shelly.shellypluspmmini;
+package io.openems.edge.io.shelly.shellyproem50;
 
 import static io.openems.common.utils.JsonUtils.getAsBoolean;
 import static io.openems.common.utils.JsonUtils.getAsFloat;
@@ -44,13 +44,13 @@ import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 
 @Designate(ocd = Config.class, factory = true)
 @Component(//
-		name = "IO.Shelly.PlusPMMini", //
+		name = "IO.Shelly.ProEM50", //
 		immediate = true, //
 		configurationPolicy = REQUIRE)
 @EventTopics({ //
 		TOPIC_CYCLE_AFTER_PROCESS_IMAGE //
 })
-public class IoShellyPlusPmMiniImpl extends AbstractOpenemsComponent implements IoShellyPlusPmMini, SinglePhaseMeter,
+public class IoShellyProEm50Impl extends AbstractOpenemsComponent implements IoShellyProEm50, SinglePhaseMeter,
 		ElectricityMeter, OpenemsComponent, TimedataProvider, EventHandler {
 
 	private final CalculateEnergyFromPower calculateProductionEnergy = new CalculateEnergyFromPower(this,
@@ -58,27 +58,30 @@ public class IoShellyPlusPmMiniImpl extends AbstractOpenemsComponent implements 
 	private final CalculateEnergyFromPower calculateConsumptionEnergy = new CalculateEnergyFromPower(this,
 			ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY);
 
-	private final Logger log = LoggerFactory.getLogger(IoShellyPlusPmMiniImpl.class);
+	private final Logger log = LoggerFactory.getLogger(IoShellyProEm50Impl.class);
 
 	private MeterType meterType = null;
 	private SinglePhase phase = null;
 	private boolean invert = false;
 	private String baseUrl;
+	private int channel = 0;
 
 	@Reference(policy = DYNAMIC, policyOption = GREEDY, cardinality = OPTIONAL)
 	private volatile Timedata timedata;
 
 	@Reference
 	private BridgeHttpFactory httpBridgeFactory;
+
 	@Reference
 	private HttpBridgeCycleServiceDefinition httpBridgeCycleServiceDefinition;
+
 	private BridgeHttp httpBridge;
 
-	public IoShellyPlusPmMiniImpl() {
+	public IoShellyProEm50Impl() {
 		super(//
 				OpenemsComponent.ChannelId.values(), //
 				ElectricityMeter.ChannelId.values(), //
-				IoShellyPlusPmMini.ChannelId.values() //
+				IoShellyProEm50.ChannelId.values() //
 		);
 
 		SinglePhaseMeter.calculateSinglePhaseFromActivePower(this);
@@ -92,6 +95,7 @@ public class IoShellyPlusPmMiniImpl extends AbstractOpenemsComponent implements 
 		this.meterType = config.type();
 		this.phase = config.phase();
 		this.invert = config.invert();
+		this.channel = config.channel();
 		this.baseUrl = "http://" + config.ip();
 		this.httpBridge = this.httpBridgeFactory.get();
 		final var cycleService = this.httpBridge.createService(this.httpBridgeCycleServiceDefinition);
@@ -131,7 +135,7 @@ public class IoShellyPlusPmMiniImpl extends AbstractOpenemsComponent implements 
 	}
 
 	private void processHttpResult(HttpResponse<JsonElement> result, Throwable error) {
-		setValue(this, IoShellyPlusPmMini.ChannelId.SLAVE_COMMUNICATION_FAILED, result == null);
+		setValue(this, IoShellyProEm50.ChannelId.SLAVE_COMMUNICATION_FAILED, result == null || error != null);
 
 		final IntFunction<Integer> invert = value -> this.invert ? value * -1 : value;
 
@@ -145,13 +149,14 @@ public class IoShellyPlusPmMiniImpl extends AbstractOpenemsComponent implements 
 
 		} else {
 			try {
-				var jsonResponse = getAsJsonObject(result.data());
-				var pm1 = getAsJsonObject(jsonResponse, "pm1:0");
-				power = invert.apply(round(getAsFloat(pm1, "apower")));
-				voltage = round(getAsFloat(pm1, "voltage") * 1000);
-				current = invert.apply(round(getAsFloat(pm1, "current") * 1000));
+				final var jsonResponse = getAsJsonObject(result.data());
 
-				var sys = getAsJsonObject(jsonResponse, "sys");
+				final var em1 = getAsJsonObject(jsonResponse, "em1:" + this.channel);
+				power = invert.apply(round(getAsFloat(em1, "act_power")));
+				voltage = round(getAsFloat(em1, "voltage") * 1000);
+				current = invert.apply(round(getAsFloat(em1, "current") * 1000));
+
+				final var sys = getAsJsonObject(jsonResponse, "sys");
 				restartRequired = getAsBoolean(sys, "restart_required");
 
 			} catch (OpenemsNamedException e) {
@@ -163,24 +168,20 @@ public class IoShellyPlusPmMiniImpl extends AbstractOpenemsComponent implements 
 		this._setCurrent(current);
 		this._setVoltage(voltage);
 
-		setValue(this, IoShellyPlusPmMini.ChannelId.NEEDS_RESTART, restartRequired);
+		setValue(this, IoShellyProEm50.ChannelId.NEEDS_RESTART, restartRequired);
 	}
 
-	/**
-	 * Calculate the Energy values from ActivePower.
-	 */
 	private void calculateEnergy() {
-		// Calculate Energy
 		final var activePower = this.getActivePower().get();
 		if (activePower == null) {
 			this.calculateProductionEnergy.update(null);
 			this.calculateConsumptionEnergy.update(null);
 		} else if (activePower >= 0) {
-			this.calculateProductionEnergy.update(activePower);
-			this.calculateConsumptionEnergy.update(0);
-		} else {
+			this.calculateConsumptionEnergy.update(activePower);
 			this.calculateProductionEnergy.update(0);
-			this.calculateConsumptionEnergy.update(-activePower);
+		} else {
+			this.calculateConsumptionEnergy.update(0);
+			this.calculateProductionEnergy.update(-activePower);
 		}
 	}
 
