@@ -173,15 +173,46 @@ public class IoShellyProEm50Impl extends AbstractOpenemsComponent implements IoS
 
 	private void calculateEnergy() {
 		final var activePower = this.getActivePower().get();
+
 		if (activePower == null) {
 			this.calculateProductionEnergy.update(null);
 			this.calculateConsumptionEnergy.update(null);
-		} else if (activePower >= 0) {
-			this.calculateConsumptionEnergy.update(activePower);
-			this.calculateProductionEnergy.update(0);
-		} else {
+			return;
+		}
+		// as the invert-feature, does not impose any change on activePower, the correct sign has to be handled through cases:
+		switch (this.meterType) {
+
+		case GRID, GRID_GENSET -> {
+			if (activePower >= 0) {
+				this.calculateConsumptionEnergy.update(activePower);
+				this.calculateProductionEnergy.update(0);
+			} else {
+				this.calculateConsumptionEnergy.update(0);
+				this.calculateProductionEnergy.update(-activePower);
+			}
+		}
+
+		case PRODUCTION -> {
+			this.calculateProductionEnergy.update(Math.abs(activePower));
 			this.calculateConsumptionEnergy.update(0);
-			this.calculateProductionEnergy.update(-activePower);
+		}
+
+		case PRODUCTION_AND_CONSUMPTION -> {
+			if (activePower >= 0) {
+				this.calculateConsumptionEnergy.update(activePower);
+				this.calculateProductionEnergy.update(0);
+			} else {
+				this.calculateConsumptionEnergy.update(0);
+				this.calculateProductionEnergy.update(-activePower);
+			}
+		}
+
+		case CONSUMPTION_METERED,
+		     MANAGED_CONSUMPTION_METERED,
+		     CONSUMPTION_NOT_METERED -> {
+			this.calculateConsumptionEnergy.update(Math.abs(activePower));
+			this.calculateProductionEnergy.update(0);
+		}
 		}
 	}
 
