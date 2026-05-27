@@ -14,7 +14,7 @@ public enum MeterType {
 	GRID,
 
 	/**
-	 * Defines a genset that is acting as a grid. (German: "Netzbildener Generator")
+	 * Defines a genset that is acting as a grid. (German: "Netzbildender Generator")
 	 */
 	GRID_GENSET,
 
