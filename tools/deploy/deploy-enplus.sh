@@ -40,7 +40,7 @@ esac
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-LOCAL_JAR="io.openems.edge.application/generated/distributions/executable/openems-edge.jar"
+LOCAL_JAR="io.openems.edge.application/generated/distributions/executable/EdgeApp.jar"
 REMOTE_DIR="/opt/openems"
 REMOTE_JAR="$REMOTE_DIR/openems-edge.jar"
 BACKUP_JAR="$REMOTE_DIR/openems-edge.jar_bak$(date +%Y%m%d)"
