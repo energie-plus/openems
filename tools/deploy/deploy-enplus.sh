@@ -40,7 +40,7 @@ esac
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-LOCAL_JAR="io.openems.edge.application/generated/distributions/executable/EdgeApp.jar"
+LOCAL_JAR="build/openems-edge.jar"
 REMOTE_DIR="/opt/openems"
 REMOTE_JAR="$REMOTE_DIR/openems-edge.jar"
 BACKUP_JAR="$REMOTE_DIR/openems-edge.jar_bak$(date +%Y%m%d)"
@@ -66,7 +66,7 @@ echo ""
 if [ ! -f "$LOCAL_JAR" ]; then
   echo "ERROR: JAR not found at $LOCAL_JAR"
   echo "Run the build first:"
-  echo "  ./gradlew :io.openems.edge.application:build"
+  echo "  ./gradlew buildEdge"
   exit 1
 fi
 
@@ -74,7 +74,7 @@ fi
 # Build
 # ---------------------------------------------------------------------------
 echo "[1/4] Building..."
-./gradlew :io.openems.edge.application:build
+./gradlew buildEdge
 echo "      Done."
 echo ""
 
