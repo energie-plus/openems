@@ -13,6 +13,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private MeterType type;
 		private SinglePhase phase;
 		private boolean invert;
+		private int channel;
 
 		private Builder() {
 		}
@@ -39,6 +40,11 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setInvert(boolean invert) {
 			this.invert = invert;
+			return this;
+		}
+
+		public Builder setChannel(int channel) {
+			this.channel = channel;
 			return this;
 		}
 
@@ -81,5 +87,10 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public boolean invert() {
 		return this.builder.invert;
+	}
+
+	@Override
+	public int channel() {
+		return this.builder.channel;
 	}
 }
