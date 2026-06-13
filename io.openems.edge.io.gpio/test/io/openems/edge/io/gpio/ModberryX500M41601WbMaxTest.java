@@ -35,15 +35,15 @@ public class ModberryX500M41601WbMaxTest {
 	private File root;
 
 	// All GPIO channels of the ModberryX500M41601WbMax:
-	// - 4x digital inputs (530-533)
+	// - 4x digital inputs (586-589)
 	// - 4x digital outputs (534-537)
 	// - 4x bidirectional output (578-581)
 	// - 4x bidirectional input (582-585)
 	private static final List<AbstractGpioChannel> CHANNEL_IDS = List.of(//
-			new ReadChannelId(530, "DigitalInput1"), //
-			new ReadChannelId(531, "DigitalInput2"), //
-			new ReadChannelId(532, "DigitalInput3"), //
-			new ReadChannelId(533, "DigitalInput4"), //
+			new ReadChannelId(586, "DigitalInput1"), //
+			new ReadChannelId(587, "DigitalInput2"), //
+			new ReadChannelId(588, "DigitalInput3"), //
+			new ReadChannelId(589, "DigitalInput4"), //
 			new WriteChannelId(534, "DigitalOutput1"), //
 			new WriteChannelId(535, "DigitalOutput2"), //
 			new WriteChannelId(536, "DigitalOutput3"), //
@@ -135,7 +135,7 @@ public class ModberryX500M41601WbMaxTest {
 	}
 
 	// -------------------------------------------------------------------------
-	// Digital inputs (530-533)
+	// Digital inputs (586-589)
 	// -------------------------------------------------------------------------
 
 	@Test
@@ -161,10 +161,10 @@ public class ModberryX500M41601WbMaxTest {
 						.output(new ChannelAddress("io0", "DigitalInput4"), false) //
 				);
 
-		this.setGpioFile(this.root, 530, 1);
-		this.setGpioFile(this.root, 531, 1);
-		this.setGpioFile(this.root, 532, 1);
-		this.setGpioFile(this.root, 533, 1);
+		this.setGpioFile(this.root, 586, 1);
+		this.setGpioFile(this.root, 587, 1);
+		this.setGpioFile(this.root, 588, 1);
+		this.setGpioFile(this.root, 589, 1);
 
 		new ComponentTest(new IoGpioImpl()) //
 				.activate(this.buildConfig()) //
