@@ -89,7 +89,7 @@ local.properties
 
 ### Eclipse Patch ###
 # Eclipse Core
-#.project
+.project
 
 # JDT-specific (Eclipse Java Development Tools)
 #.classpath
@@ -241,3 +241,4 @@ io.openems.edge.application/c:/
 
 ### Docker - for Dev UI under WSL ###
 docker-compose.override.yml
+
