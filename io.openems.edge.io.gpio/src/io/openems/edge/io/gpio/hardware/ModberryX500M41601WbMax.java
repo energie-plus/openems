@@ -10,10 +10,10 @@ import io.openems.edge.io.gpio.linuxfs.HardwareFactory;
 public final class ModberryX500M41601WbMax extends ModBerryX500 {
 
 	private final List<ChannelId> channelIds = List.of(//
-			new ReadChannelId(530, "DIGITAL_INPUT_1"), //
-			new ReadChannelId(531, "DIGITAL_INPUT_2"), //
-			new ReadChannelId(532, "DIGITAL_INPUT_3"), //
-			new ReadChannelId(533, "DIGITAL_INPUT_4"), //
+			new ReadChannelId(586, "DIGITAL_INPUT_1"), //
+			new ReadChannelId(587, "DIGITAL_INPUT_2"), //
+			new ReadChannelId(588, "DIGITAL_INPUT_3"), //
+			new ReadChannelId(589, "DIGITAL_INPUT_4"), //
 			
 			new WriteChannelId(534, "DIGITAL_OUTPUT_1"), //
 			new WriteChannelId(535, "DIGITAL_OUTPUT_2"), //
