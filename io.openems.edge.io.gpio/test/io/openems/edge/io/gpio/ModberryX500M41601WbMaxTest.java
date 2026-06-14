@@ -33,23 +33,38 @@ public class ModberryX500M41601WbMaxTest {
 
 	private File root;
 
-	// All GPIO channels of the ModberryX500M41601WbMax:
-	// - 4x digital inputs (586-589, OPTO DI)
-	// - 4x digital outputs (578-581, DO)
-	// - 4x configurable digital I/O used as outputs (582-585, DIO)
+	// All GPIO channels of the ModberryX500M41601WbMax, mirroring the
+	// declarations in ModberryX500M41601WbMax.java:
+	// - 4x digital inputs (530-533, OPTO DI)
+	// - 4x digital outputs (534-537, DO)
+	// - 4x configurable digital I/O used as outputs (578-581, DIO ..._OUT)
+	// - 4x configurable digital I/O read-back channels (582-585, DIO ..._IN)
 	private static final List<AbstractGpioChannel> CHANNEL_IDS = List.of(//
-			new ReadChannelId(586, "DigitalInput1"), //
-			new ReadChannelId(587, "DigitalInput2"), //
-			new ReadChannelId(588, "DigitalInput3"), //
-			new ReadChannelId(589, "DigitalInput4"), //
-			new WriteChannelId(578, "DigitalOutput1"), //
-			new WriteChannelId(579, "DigitalOutput2"), //
-			new WriteChannelId(580, "DigitalOutput3"), //
-			new WriteChannelId(581, "DigitalOutput4"), //
-			new WriteChannelId(582, "DigitalInputOutput1"), //
-			new WriteChannelId(583, "DigitalInputOutput2"), //
-			new WriteChannelId(584, "DigitalInputOutput3"), //
-			new WriteChannelId(585, "DigitalInputOutput4") //
+			new ReadChannelId(530, "DIGITAL_INPUT_1"), //
+			new ReadChannelId(531, "DIGITAL_INPUT_2"), //
+			new ReadChannelId(532, "DIGITAL_INPUT_3"), //
+			new ReadChannelId(533, "DIGITAL_INPUT_4"), //
+
+			new WriteChannelId(534, "DIGITAL_OUTPUT_1"), //
+			new WriteChannelId(535, "DIGITAL_OUTPUT_2"), //
+			new WriteChannelId(536, "DIGITAL_OUTPUT_3"), //
+			new WriteChannelId(537, "DIGITAL_OUTPUT_4"), //
+
+			new WriteChannelId(578, "DIGITAL_INPUT_OUTPUT_1_OUT"), //
+			new WriteChannelId(579, "DIGITAL_INPUT_OUTPUT_2_OUT"), //
+			new WriteChannelId(580, "DIGITAL_INPUT_OUTPUT_3_OUT"), //
+			new WriteChannelId(581, "DIGITAL_INPUT_OUTPUT_4_OUT"), //
+
+			// DIO 1-4 are bidirectional pins (see hardware layout).
+			// All four pins are currently configured as output (direction=out),
+			// so the following read channels simply return the last value written
+			// to the output, not an external input signal.
+			// To use a DIO pin as input, its direction must be set manually to "in"
+			// via /sys/class/gpio/gpioXXX/direction.
+			new ReadChannelId(582, "DIGITAL_INPUT_OUTPUT_1_IN"), //
+			new ReadChannelId(583, "DIGITAL_INPUT_OUTPUT_2_IN"), //
+			new ReadChannelId(584, "DIGITAL_INPUT_OUTPUT_3_IN"), //
+			new ReadChannelId(585, "DIGITAL_INPUT_OUTPUT_4_IN") //
 	);
 
 	@Rule
@@ -120,13 +135,34 @@ public class ModberryX500M41601WbMaxTest {
 	public void testChannelIdsAreCorrect() throws Exception {
 		IoGpio component = new IoGpioImpl();
 		new ComponentTest(component).activate(this.buildConfig());
+
+		// Digital inputs (OPTO DI)
 		assertNotNull(component.channel("DigitalInput1"));
+		assertNotNull(component.channel("DigitalInput2"));
+		assertNotNull(component.channel("DigitalInput3"));
+		assertNotNull(component.channel("DigitalInput4"));
+
+		// Digital outputs (DO)
 		assertNotNull(component.channel("DigitalOutput1"));
-		assertNotNull(component.channel("DigitalInputOutput1"));
+		assertNotNull(component.channel("DigitalOutput2"));
+		assertNotNull(component.channel("DigitalOutput3"));
+		assertNotNull(component.channel("DigitalOutput4"));
+
+		// Configurable digital I/O (DIO), output side
+		assertNotNull(component.channel("DigitalInputOutput1Out"));
+		assertNotNull(component.channel("DigitalInputOutput2Out"));
+		assertNotNull(component.channel("DigitalInputOutput3Out"));
+		assertNotNull(component.channel("DigitalInputOutput4Out"));
+
+		// Configurable digital I/O (DIO), input/read-back side
+		assertNotNull(component.channel("DigitalInputOutput1In"));
+		assertNotNull(component.channel("DigitalInputOutput2In"));
+		assertNotNull(component.channel("DigitalInputOutput3In"));
+		assertNotNull(component.channel("DigitalInputOutput4In"));
 	}
 
 	// -------------------------------------------------------------------------
-	// Digital inputs (586-589, OPTO DI)
+	// Digital inputs (530-533, OPTO DI)
 	// -------------------------------------------------------------------------
 
 	@Test
@@ -152,10 +188,10 @@ public class ModberryX500M41601WbMaxTest {
 						.output(new ChannelAddress("io0", "DigitalInput4"), false) //
 				);
 
-		this.setGpioFile(this.root, 586, 1);
-		this.setGpioFile(this.root, 587, 1);
-		this.setGpioFile(this.root, 588, 1);
-		this.setGpioFile(this.root, 589, 1);
+		this.setGpioFile(this.root, 530, 1);
+		this.setGpioFile(this.root, 531, 1);
+		this.setGpioFile(this.root, 532, 1);
+		this.setGpioFile(this.root, 533, 1);
 
 		new ComponentTest(new IoGpioImpl()) //
 				.activate(this.buildConfig()) //
@@ -168,15 +204,15 @@ public class ModberryX500M41601WbMaxTest {
 	}
 
 	// -------------------------------------------------------------------------
-	// Digital outputs (578-581, DO)
+	// Digital outputs (534-537, DO)
 	// -------------------------------------------------------------------------
 
 	@Test
 	public void testDigitalOutputsWrittenToFs() throws Exception {
-		assertEquals(this.readGpioFile(this.root, 578), "0");
-		assertEquals(this.readGpioFile(this.root, 579), "0");
-		assertEquals(this.readGpioFile(this.root, 580), "0");
-		assertEquals(this.readGpioFile(this.root, 581), "0");
+		assertEquals(this.readGpioFile(this.root, 534), "0");
+		assertEquals(this.readGpioFile(this.root, 535), "0");
+		assertEquals(this.readGpioFile(this.root, 536), "0");
+		assertEquals(this.readGpioFile(this.root, 537), "0");
 
 		new ComponentTest(new IoGpioImpl()) //
 				.activate(this.buildConfig()) //
@@ -187,6 +223,32 @@ public class ModberryX500M41601WbMaxTest {
 						.input(new ChannelAddress("io0", "DigitalOutput4"), true) //
 				);
 
+		assertEquals(this.readGpioFile(this.root, 534), "1");
+		assertEquals(this.readGpioFile(this.root, 535), "1");
+		assertEquals(this.readGpioFile(this.root, 536), "1");
+		assertEquals(this.readGpioFile(this.root, 537), "1");
+	}
+
+	// -------------------------------------------------------------------------
+	// Configurable I/O used as outputs (578-581, DIO ..._OUT)
+	// -------------------------------------------------------------------------
+
+	@Test
+	public void testDioOutputsWrittenToFs() throws Exception {
+		assertEquals(this.readGpioFile(this.root, 578), "0");
+		assertEquals(this.readGpioFile(this.root, 579), "0");
+		assertEquals(this.readGpioFile(this.root, 580), "0");
+		assertEquals(this.readGpioFile(this.root, 581), "0");
+
+		new ComponentTest(new IoGpioImpl()) //
+				.activate(this.buildConfig()) //
+				.next(new TestCase("DIO outputs written to filesystem") //
+						.input(new ChannelAddress("io0", "DigitalInputOutput1Out"), true) //
+						.input(new ChannelAddress("io0", "DigitalInputOutput2Out"), true) //
+						.input(new ChannelAddress("io0", "DigitalInputOutput3Out"), true) //
+						.input(new ChannelAddress("io0", "DigitalInputOutput4Out"), true) //
+				);
+
 		assertEquals(this.readGpioFile(this.root, 578), "1");
 		assertEquals(this.readGpioFile(this.root, 579), "1");
 		assertEquals(this.readGpioFile(this.root, 580), "1");
@@ -194,29 +256,40 @@ public class ModberryX500M41601WbMaxTest {
 	}
 
 	// -------------------------------------------------------------------------
-	// Configurable I/O used as outputs (582-585, DIO)
+	// Configurable I/O read-back channels (582-585, DIO ..._IN)
 	// -------------------------------------------------------------------------
 
 	@Test
-	public void testDioOutputsWrittenToFs() throws Exception {
-		assertEquals(this.readGpioFile(this.root, 582), "0");
-		assertEquals(this.readGpioFile(this.root, 583), "0");
-		assertEquals(this.readGpioFile(this.root, 584), "0");
-		assertEquals(this.readGpioFile(this.root, 585), "0");
+	public void testDioInputsDefaultFalse() throws Exception {
+		new ComponentTest(new IoGpioImpl()) //
+				.activate(this.buildConfig()) //
+				.next(new TestCase("DIO read-back channels default to false") //
+						.output(new ChannelAddress("io0", "DigitalInputOutput1In"), false) //
+						.output(new ChannelAddress("io0", "DigitalInputOutput2In"), false) //
+						.output(new ChannelAddress("io0", "DigitalInputOutput3In"), false) //
+						.output(new ChannelAddress("io0", "DigitalInputOutput4In"), false) //
+				);
+	}
+
+	@Test
+	public void testDioInputsReflectGpioValue() throws Exception {
+		// Since DIO 1-4 are currently configured as output, the ..._IN read
+		// channels simply mirror whatever value is on the underlying GPIO -
+		// in this test that is the value written directly to the value file
+		// (simulating either an external signal or the last written output).
+		this.setGpioFile(this.root, 582, 1);
+		this.setGpioFile(this.root, 583, 1);
+		this.setGpioFile(this.root, 584, 1);
+		this.setGpioFile(this.root, 585, 1);
 
 		new ComponentTest(new IoGpioImpl()) //
 				.activate(this.buildConfig()) //
-				.next(new TestCase("DIO outputs written to filesystem") //
-						.input(new ChannelAddress("io0", "DigitalInputOutput1"), true) //
-						.input(new ChannelAddress("io0", "DigitalInputOutput2"), true) //
-						.input(new ChannelAddress("io0", "DigitalInputOutput3"), true) //
-						.input(new ChannelAddress("io0", "DigitalInputOutput4"), true) //
+				.next(new TestCase("DIO read-back channels reflect GPIO value") //
+						.output(new ChannelAddress("io0", "DigitalInputOutput1In"), true) //
+						.output(new ChannelAddress("io0", "DigitalInputOutput2In"), true) //
+						.output(new ChannelAddress("io0", "DigitalInputOutput3In"), true) //
+						.output(new ChannelAddress("io0", "DigitalInputOutput4In"), true) //
 				);
-
-		assertEquals(this.readGpioFile(this.root, 582), "1");
-		assertEquals(this.readGpioFile(this.root, 583), "1");
-		assertEquals(this.readGpioFile(this.root, 584), "1");
-		assertEquals(this.readGpioFile(this.root, 585), "1");
 	}
 
 	// -------------------------------------------------------------------------
@@ -225,7 +298,7 @@ public class ModberryX500M41601WbMaxTest {
 
 	@Test
 	public void testJavaApi() throws Exception {
-		this.setGpioFile(this.root, 578, 0);
+		this.setGpioFile(this.root, 534, 0);
 		var componentManager = new DummyComponentManager();
 		var componentTest = new ComponentTest(new IoGpioImpl()) //
 				.activate(this.buildConfig());
@@ -241,7 +314,7 @@ public class ModberryX500M41601WbMaxTest {
 	public void testDigitalOutputChannelCount() throws Exception {
 		var componentTest = new ComponentTest(new IoGpioImpl()) //
 				.activate(this.buildConfig());
-		// 4x DO + 4x DIO = 8 output channels
+		// 4x DO (534-537) + 4x DIO_OUT (578-581) = 8 output channels
 		assertTrue(((DigitalOutput) componentTest.getSut()).digitalOutputChannels().length == 8);
 	}
 
@@ -249,7 +322,7 @@ public class ModberryX500M41601WbMaxTest {
 	public void testDigitalInputChannelCount() throws Exception {
 		var componentTest = new ComponentTest(new IoGpioImpl()) //
 				.activate(this.buildConfig());
-		// 4x OPTO DI
-		assertTrue(((DigitalInput) componentTest.getSut()).digitalInputChannels().length == 4);
+		// 4x OPTO DI (530-533) + 4x DIO_IN (582-585) = 8 input channels
+		assertTrue(((DigitalInput) componentTest.getSut()).digitalInputChannels().length == 8);
 	}
 }

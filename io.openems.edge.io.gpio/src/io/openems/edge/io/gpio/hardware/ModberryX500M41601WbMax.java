@@ -10,25 +10,31 @@ import io.openems.edge.io.gpio.linuxfs.HardwareFactory;
 public final class ModberryX500M41601WbMax extends ModBerryX500 {
 
 	private final List<ChannelId> channelIds = List.of(//
-			new ReadChannelId(586, "DIGITAL_INPUT_1"), //
-			new ReadChannelId(587, "DIGITAL_INPUT_2"), //
-			new ReadChannelId(588, "DIGITAL_INPUT_3"), //
-			new ReadChannelId(589, "DIGITAL_INPUT_4"), //
-			
-			new WriteChannelId(578, "DIGITAL_OUTPUT_1"), //
-			new WriteChannelId(579, "DIGITAL_OUTPUT_2"), //
-			new WriteChannelId(580, "DIGITAL_OUTPUT_3"), //
-			new WriteChannelId(581, "DIGITAL_OUTPUT_4"), //
-			
-			// Configurable I/Os (DIO 1-4) - configured as outputs only.
-			// To use as inputs, the operating mode must be changed via the npe application
-			// (e.g. "npe IDIOconf1" for DIO1/2, "npe IDIOconf2" for DIO3/4).
-			// Bidirectional support can be added as a future feature.
-			new WriteChannelId(582, "DIGITAL_INPUT_OUTPUT_1"), //
-			new WriteChannelId(583, "DIGITAL_INPUT_OUTPUT_2"), //
-			new WriteChannelId(584, "DIGITAL_INPUT_OUTPUT_3"), //
-			new WriteChannelId(585, "DIGITAL_INPUT_OUTPUT_4") //
+			new ReadChannelId(530, "DIGITAL_INPUT_1"), //
+			new ReadChannelId(531, "DIGITAL_INPUT_2"), //
+			new ReadChannelId(532, "DIGITAL_INPUT_3"), //
+			new ReadChannelId(533, "DIGITAL_INPUT_4"), //
 
+			new WriteChannelId(534, "DIGITAL_OUTPUT_1"), //
+			new WriteChannelId(535, "DIGITAL_OUTPUT_2"), //
+			new WriteChannelId(536, "DIGITAL_OUTPUT_3"), //
+			new WriteChannelId(537, "DIGITAL_OUTPUT_4"), //
+
+			new WriteChannelId(578, "DIGITAL_INPUT_OUTPUT_1_OUT"), //
+			new WriteChannelId(579, "DIGITAL_INPUT_OUTPUT_2_OUT"), //
+			new WriteChannelId(580, "DIGITAL_INPUT_OUTPUT_3_OUT"), //
+			new WriteChannelId(581, "DIGITAL_INPUT_OUTPUT_4_OUT"), //
+
+			// DIO 1-4 are bidirectional pins (see hardware layout).
+			// All four pins are currently configured as output (direction=out),
+			// so the following read channels simply return the last value written
+			// to the output, not an external input signal.
+			// To use a DIO pin as input, its direction must be set manually to "in"
+			// via /sys/class/gpio/gpioXXX/direction.
+			new ReadChannelId(582, "DIGITAL_INPUT_OUTPUT_1_IN"), //
+			new ReadChannelId(583, "DIGITAL_INPUT_OUTPUT_2_IN"), //
+			new ReadChannelId(584, "DIGITAL_INPUT_OUTPUT_3_IN"), //
+			new ReadChannelId(585, "DIGITAL_INPUT_OUTPUT_4_IN") //
 	);
 
 	public ModberryX500M41601WbMax(HardwareFactory context) {
