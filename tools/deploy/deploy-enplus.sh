@@ -3,7 +3,12 @@
 # Deploys the OpenEMS Edge JAR to an EnPlus device.
 #
 # Usage:
-#   ./tools/deploy/deploy-enplus.sh <device>
+#   ./tools/deploy/deploy-enplus.sh [--rebuild-integration] <device>
+#
+# Options:
+#   --rebuild-integration   Rebuild the integration branch from develop +
+#                           INTEGRATION_FEATURES before deploying.
+#                           Only allowed for device 'test'.
 #
 # Devices:
 #   home   - ems4 / 192.168.1.224
@@ -11,13 +16,35 @@
 #
 # Example:
 #   ./tools/deploy/deploy-enplus.sh test
+#   ./tools/deploy/deploy-enplus.sh --rebuild-integration test
 
 set -e
 
 # ---------------------------------------------------------------------------
-# Device configuration
+# Features to include in the integration branch
+# Add/remove branches here to control what gets tested together.
 # ---------------------------------------------------------------------------
-DEVICE=$1
+INTEGRATION_FEATURES=(
+  "feature/shelly-pro-em50"
+  "feature/x500-gpio-v2"
+)
+
+# ---------------------------------------------------------------------------
+# Parse arguments
+# ---------------------------------------------------------------------------
+REBUILD_INTEGRATION=false
+DEVICE=""
+
+for arg in "$@"; do
+  case $arg in
+    --rebuild-integration)
+      REBUILD_INTEGRATION=true
+      ;;
+    *)
+      DEVICE=$arg
+      ;;
+  esac
+done
 
 case $DEVICE in
   home)
@@ -44,6 +71,30 @@ LOCAL_JAR="build/openems-edge.jar"
 REMOTE_DIR="/opt/openems"
 REMOTE_JAR="$REMOTE_DIR/openems-edge.jar"
 BACKUP_JAR="$REMOTE_DIR/openems-edge.jar_bak$(date +%Y%m%d)"
+
+# ---------------------------------------------------------------------------
+# Rebuild integration branch (optional)
+# ---------------------------------------------------------------------------
+if [ "$REBUILD_INTEGRATION" = true ]; then
+  if [ "$DEVICE" != "test" ]; then
+    echo "ERROR: --rebuild-integration ist nur für device 'test' erlaubt."
+    exit 1
+  fi
+
+  echo ">>> Rebuilding integration branch..."
+  git checkout develop
+  git pull --ff-only
+  git checkout -B integration
+
+  for branch in "${INTEGRATION_FEATURES[@]}"; do
+    echo "    Merging $branch..."
+    git merge --no-ff "$branch" -m "integration: merge $branch"
+  done
+
+  git push origin integration --force-with-lease
+  echo ">>> Integration branch rebuilt."
+  echo ""
+fi
 
 # ---------------------------------------------------------------------------
 # Git info
