@@ -77,11 +77,6 @@ BACKUP_JAR="$REMOTE_DIR/openems-edge.jar_bak$(date +%Y%m%d)"
 # Rebuild integration branch (optional)
 # ---------------------------------------------------------------------------
 if [ "$REBUILD_INTEGRATION" = true ]; then
-  if [ "$DEVICE" != "test" ]; then
-    echo "ERROR: --rebuild-integration ist nur für device 'test' erlaubt."
-    exit 1
-  fi
-
   echo ">>> Rebuilding integration branch..."
   git checkout develop
   git pull --ff-only
