@@ -25,6 +25,7 @@ set -e
 # Add/remove branches here to control what gets tested together.
 # ---------------------------------------------------------------------------
 INTEGRATION_FEATURES=(
+  "feature/deploy-script"
   "feature/shelly-pro-em50"
   "feature/x500-gpio-v2"
 )
