@@ -8,7 +8,6 @@ import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.SCALE_
 import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.SCALE_FACTOR_3;
 import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.SCALE_FACTOR_MINUS_1;
 import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.SCALE_FACTOR_MINUS_2;
-import static io.openems.edge.common.channel.ChannelUtils.setValue;
 import static io.openems.edge.common.channel.ChannelUtils.setWriteValueIfNotRead;
 import static io.openems.edge.common.type.Phase.SingleOrAllPhase.ALL;
 import static io.openems.edge.ess.power.api.Pwr.ACTIVE;
@@ -142,9 +141,6 @@ public class GoodWeBatteryInverterImpl extends AbstractGoodWe implements GoodWeB
 	private static final long POWER_SETTINGS_DEBOUNCE_MS = 250;
 	private static final TwoPartVersion MINIMAL_DSP_VERSION_FOR_V3_TASKS = new TwoPartVersion(//
 			1, 212);
-	// Register FEED_POWER_PARA_SET (47510) is written as SignedWordElement
-	// (16-bit).
-	private static final int MAX_LEGACY_FEED_POWER = Short.MAX_VALUE;
 	private static final Logger LOG = LoggerFactory.getLogger(GoodWeBatteryInverterImpl.class);
 
 	private final AtomicReference<StartStop> startStopTarget = new AtomicReference<>(StartStop.UNDEFINED);
@@ -492,42 +488,6 @@ public class GoodWeBatteryInverterImpl extends AbstractGoodWe implements GoodWeB
 		EnumWriteChannel pfOverfrequencyChannel = this
 				.channel(GoodWePowerSetting.ChannelId.V2_APM_ENABLE_PF_OVERFREQUENZY_CURVE);
 		pfOverfrequencyChannel.setNextWriteValue(EnableCurve.DISABLE);
-	}
-
-	private void handleFeedInSetting(boolean feedPowerEnable, int feedPowerPara, GoodWeType goodweType)
-			throws IllegalArgumentException, OpenemsNamedException {
-
-		// TODO: Add individual handling related to each GoodWeType
-		switch (goodweType) {
-		case FENECON_50K, FENECON_100K -> {
-			// Feed-in limitation on / off
-			setWriteValueIfNotRead(this.channel(GoodWe.ChannelId.EXTENDED_FEED_POWER_ENABLE), feedPowerEnable);
-			setWriteValueIfNotRead(this.channel(GoodWe.ChannelId.FEED_POWER_ENABLE), feedPowerEnable);
-			// Feed-in limitation
-			setWriteValueIfNotRead(this.channel(GoodWe.ChannelId.EXTENDED_FEED_POWER_PARA_SET), feedPowerPara);
-			setValue(this, GoodWe.ChannelId.FEED_POWER_LIMIT_EXCEEDS_SUPPORTED_MAXIMUM, false);
-		}
-		case FENECON_FHI_29_9_DAH -> {
-			// Feed-in limitation on / off
-			setWriteValueIfNotRead(this.channel(GoodWe.ChannelId.EXTENDED_FEED_POWER_ENABLE), feedPowerEnable);
-			setWriteValueIfNotRead(this.channel(GoodWe.ChannelId.FEED_POWER_ENABLE), feedPowerEnable);
-			// Feed-in limitation
-			setWriteValueIfNotRead(this.channel(GoodWe.ChannelId.EXTENDED_FEED_POWER_PARA_SET), feedPowerPara);
-			setValue(this, GoodWe.ChannelId.FEED_POWER_LIMIT_EXCEEDS_SUPPORTED_MAXIMUM, false);
-		}
-		case FENECON_FHI_10_DAH, FENECON_FHI_20_DAH, FENECON_GEN2_10K, FENECON_GEN2_15K,
-				FENECON_GEN2_6K, GOODWE_10K_BT, GOODWE_10K_ET, GOODWE_5K_BT, GOODWE_5K_ET, GOODWE_8K_BT,
-				GOODWE_8K_ET, GOODWE_15K_ET -> {
-			// Feed-in limitation on / off
-			setWriteValueIfNotRead(this.channel(GoodWe.ChannelId.FEED_POWER_ENABLE), feedPowerEnable);
-			// Feed-in limitation - register is a signed 16-bit value, clamp defensively.
-			var exceedsMaximum = feedPowerPara > MAX_LEGACY_FEED_POWER;
-			setValue(this, GoodWe.ChannelId.FEED_POWER_LIMIT_EXCEEDS_SUPPORTED_MAXIMUM, exceedsMaximum);
-			var clampedFeedPowerPara = min(feedPowerPara, MAX_LEGACY_FEED_POWER);
-			setWriteValueIfNotRead(this.channel(GoodWe.ChannelId.FEED_POWER_PARA_SET), clampedFeedPowerPara);
-		}
-		case UNDEFINED -> doNothing();
-		}
 	}
 
 	record BatteryLimitsChannel(//
@@ -1053,7 +1013,7 @@ public class GoodWeBatteryInverterImpl extends AbstractGoodWe implements GoodWeB
 					GoodWeType.FENECON_FHI_20_DAH, GoodWeType.FENECON_GEN2_10K, GoodWeType.FENECON_GEN2_15K,
 					GoodWeType.FENECON_GEN2_6K, GoodWeType.GOODWE_10K_BT, GoodWeType.GOODWE_10K_ET,
 					GoodWeType.GOODWE_5K_BT, GoodWeType.GOODWE_5K_ET, GoodWeType.GOODWE_8K_BT,
-					GoodWeType.GOODWE_8K_ET -> this.handleGridFeedForOther();
+					GoodWeType.GOODWE_8K_ET, GoodWeType.GOODWE_15K_ET -> this.handleGridFeedForOther();
 			case GoodWeType.UNDEFINED -> doNothing();
 		}
 	}

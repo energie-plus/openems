@@ -14,7 +14,9 @@ import static io.openems.edge.bridge.modbus.api.ElementToChannelConverter.chain;
 import static io.openems.edge.bridge.modbus.api.ModbusUtils.readElementOnce;
 import static io.openems.edge.bridge.modbus.api.ModbusUtils.readElementsOnce;
 import static io.openems.edge.bridge.modbus.api.ModbusUtils.FunctionCode.FC3;
+import static io.openems.common.utils.FunctionUtils.doNothing;
 import static io.openems.edge.common.channel.ChannelUtils.setValue;
+import static io.openems.edge.common.channel.ChannelUtils.setWriteValueIfNotRead;
 import static java.lang.Math.min;
 
 import java.util.ArrayList;
@@ -36,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import com.google.common.annotations.VisibleForTesting;
 
 import io.openems.common.exceptions.OpenemsException;
+import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.types.OpenemsType;
 import io.openems.common.utils.FunctionUtils;
 import io.openems.edge.battery.api.Battery;
@@ -89,6 +92,9 @@ public abstract class AbstractGoodWe extends AbstractOpenemsModbusComponent
 		implements GoodWe, OpenemsComponent, TimedataProvider, EventHandler {
 
 	private static final Logger LOG = LoggerFactory.getLogger(AbstractGoodWe.class);
+	// Register FEED_POWER_PARA_SET (47510) is written as SignedWordElement
+	// (16-bit).
+	private static final int MAX_LEGACY_FEED_POWER = Short.MAX_VALUE;
 	private static final Map<Integer, GoodWe.ChannelId> DIAG_STATUS_H_STATES = Map.of(//
 			0x00000001, GoodWe.ChannelId.DIAG_STATUS_BATTERY_PRECHARGE_RELAY_OFF, //
 			0x00000002, GoodWe.ChannelId.DIAG_STATUS_BYPASS_RELAY_STICK, //
@@ -2395,6 +2401,45 @@ public abstract class AbstractGoodWe extends AbstractOpenemsModbusComponent
 		}
 		removingTasks.stream() //
 				.forEach(protocol::removeTask);
+	}
+
+	/**
+	 * Applies the hardware feed-in limitation via Modbus registers.
+	 *
+	 * <p>
+	 * When enabled, the inverter enforces the export limit in hardware,
+	 * which also works when the battery is full (SoC 100%) and software-only
+	 * controllers cannot curtail PV production.
+	 *
+	 * @param feedPowerEnable true to enable the hardware feed-in limit
+	 * @param feedPowerPara   the maximum grid feed-in power in [W]
+	 * @param goodweType      the detected {@link GoodWeType}
+	 * @throws OpenemsNamedException on Modbus write error
+	 */
+	protected void handleFeedInSetting(boolean feedPowerEnable, int feedPowerPara, GoodWeType goodweType)
+			throws IllegalArgumentException, OpenemsNamedException {
+		switch (goodweType) {
+		case FENECON_50K, FENECON_100K, FENECON_FHI_29_9_DAH -> {
+			// Feed-in limitation on / off
+			setWriteValueIfNotRead(this.channel(GoodWe.ChannelId.EXTENDED_FEED_POWER_ENABLE), feedPowerEnable);
+			setWriteValueIfNotRead(this.channel(GoodWe.ChannelId.FEED_POWER_ENABLE), feedPowerEnable);
+			// Feed-in limitation
+			setWriteValueIfNotRead(this.channel(GoodWe.ChannelId.EXTENDED_FEED_POWER_PARA_SET), feedPowerPara);
+			setValue(this, GoodWe.ChannelId.FEED_POWER_LIMIT_EXCEEDS_SUPPORTED_MAXIMUM, false);
+		}
+		case FENECON_FHI_10_DAH, FENECON_FHI_20_DAH, FENECON_GEN2_10K, FENECON_GEN2_15K, FENECON_GEN2_6K,
+				GOODWE_10K_BT, GOODWE_10K_ET, GOODWE_5K_BT, GOODWE_5K_ET, GOODWE_8K_BT, GOODWE_8K_ET,
+				GOODWE_15K_ET -> {
+			// Feed-in limitation on / off
+			setWriteValueIfNotRead(this.channel(GoodWe.ChannelId.FEED_POWER_ENABLE), feedPowerEnable);
+			// Feed-in limitation - register is a signed 16-bit value, clamp defensively.
+			var exceedsMaximum = feedPowerPara > MAX_LEGACY_FEED_POWER;
+			setValue(this, GoodWe.ChannelId.FEED_POWER_LIMIT_EXCEEDS_SUPPORTED_MAXIMUM, exceedsMaximum);
+			var clampedFeedPowerPara = min(feedPowerPara, MAX_LEGACY_FEED_POWER);
+			setWriteValueIfNotRead(this.channel(GoodWe.ChannelId.FEED_POWER_PARA_SET), clampedFeedPowerPara);
+		}
+		case UNDEFINED -> doNothing();
+		}
 	}
 
 }

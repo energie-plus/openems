@@ -13,6 +13,8 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private int capacity;
 		private int maxBatteryPower;
 		private ControlMode controlMode;
+		private boolean feedPowerEnable;
+		private int feedPowerPara;
 
 		private Builder() {
 		}
@@ -44,6 +46,16 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setControlMode(ControlMode controlMode) {
 			this.controlMode = controlMode;
+			return this;
+		}
+
+		public Builder setFeedPowerEnable(boolean feedPowerEnable) {
+			this.feedPowerEnable = feedPowerEnable;
+			return this;
+		}
+
+		public Builder setFeedPowerPara(int feedPowerPara) {
+			this.feedPowerPara = feedPowerPara;
 			return this;
 		}
 
@@ -91,6 +103,16 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public ControlMode controlMode() {
 		return this.builder.controlMode;
+	}
+
+	@Override
+	public boolean feedPowerEnable() {
+		return this.builder.feedPowerEnable;
+	}
+
+	@Override
+	public int feedPowerPara() {
+		return this.builder.feedPowerPara;
 	}
 
 }
