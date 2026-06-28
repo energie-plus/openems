@@ -118,6 +118,9 @@ public class GoodWeEssImpl extends AbstractGoodWe implements GoodWeEss, GoodWe, 
 		this.handleMaxAcPower(this.getMaxApparentPower().orElse(0), this.getWbmsChargeMaxCurrent().get(),
 				this.getWbmsDischargeMaxCurrent().get(), this.getWbmsVoltage().get());
 
+		// Hardware feed-in limitation (effective even when battery is full)
+		this.handleFeedInSetting(this.config.feedPowerEnable(), this.config.feedPowerPara(), this.getGoodweType());
+
 		// Apply Power Set-Point
 		this.applyPowerHandler.apply(activePower, this.config.controlMode(), this.sum.getGridActivePower(),
 				this.getActivePower(), this.getMaxAcImport(), this.getMaxAcExport(), this.power.isFilterEnabled());
