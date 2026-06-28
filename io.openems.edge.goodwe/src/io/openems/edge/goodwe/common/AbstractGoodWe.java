@@ -1076,6 +1076,7 @@ public abstract class AbstractGoodWe extends AbstractOpenemsModbusComponent
 		case "GW10K-ET" -> GoodWeType.GOODWE_10K_ET;
 		case "GW8K-ET" -> GoodWeType.GOODWE_8K_ET;
 		case "GW5K-ET" -> GoodWeType.GOODWE_5K_ET;
+		case "GW15K-ET" -> GoodWeType.GOODWE_15K_ET;
 		case "FHI-10-DAH" -> GoodWeType.FENECON_FHI_10_DAH;
 		default -> GoodWeType.UNDEFINED;
 		};
@@ -2196,8 +2197,8 @@ public abstract class AbstractGoodWe extends AbstractOpenemsModbusComponent
 		}
 		return switch (goodWeType) {
 		case UNDEFINED, GOODWE_10K_BT, GOODWE_8K_BT, GOODWE_5K_BT, GOODWE_10K_ET, GOODWE_8K_ET, GOODWE_5K_ET,
-				FENECON_FHI_10_DAH, FENECON_FHI_20_DAH, FENECON_FHI_29_9_DAH, FENECON_GEN2_6K, FENECON_GEN2_10K,
-				FENECON_GEN2_15K -> {
+				GOODWE_15K_ET, FENECON_FHI_10_DAH, FENECON_FHI_20_DAH, FENECON_FHI_29_9_DAH, FENECON_GEN2_6K,
+				FENECON_GEN2_10K, FENECON_GEN2_15K -> {
 			yield defaultMapGridMode(value);
 		}
 		case FENECON_50K, FENECON_100K -> {

@@ -427,7 +427,7 @@ public class GoodWeBatteryInverterImpl extends AbstractGoodWe implements GoodWeB
 		}
 		case FENECON_FHI_10_DAH, FENECON_FHI_20_DAH, FENECON_FHI_29_9_DAH, FENECON_GEN2_10K, FENECON_GEN2_15K,
 				FENECON_GEN2_6K, GOODWE_10K_BT, GOODWE_10K_ET, GOODWE_5K_BT, GOODWE_5K_ET, GOODWE_8K_BT,
-				GOODWE_8K_ET -> {
+				GOODWE_8K_ET, GOODWE_15K_ET -> {
 			setWriteValueIfNotRead(this.channel(GoodWe.ChannelId.FIXED_POWER_FACTOR), fixedPowerFactor);
 		}
 		case UNDEFINED -> doNothing();
@@ -457,7 +457,7 @@ public class GoodWeBatteryInverterImpl extends AbstractGoodWe implements GoodWeB
 		}
 		case FENECON_FHI_10_DAH, FENECON_FHI_20_DAH, FENECON_FHI_29_9_DAH, FENECON_GEN2_10K, FENECON_GEN2_15K,
 				FENECON_GEN2_6K, GOODWE_10K_BT, GOODWE_10K_ET, GOODWE_5K_BT, GOODWE_5K_ET, GOODWE_8K_BT,
-				GOODWE_8K_ET -> {
+				GOODWE_8K_ET, GOODWE_15K_ET -> {
 			// Feed-in limitation on / off
 			setWriteValueIfNotRead(this.channel(GoodWe.ChannelId.FEED_POWER_ENABLE), feedPowerEnable);
 
