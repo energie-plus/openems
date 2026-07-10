@@ -1,0 +1,36 @@
+= MQTT Meter Adapter API
+
+Common abstraction for OpenEMS Meters that receive their readings via MQTT, on top of the
+generic `io.openems.edge.bridge.mqtt` Bridge.
+
+== Concept
+
+A physical MQTT-based meter is split into two independent pieces:
+
+- A `link:src/io/openems/edge/meter/mqtt/api/MqttMeterAdapter.java[MqttMeterAdapter]` implementation,
+  one per *device family* (e.g. Shelly Gen2 RPC devices), that knows the topic layout and payload
+  format of that family and turns a raw `MqttMessage` into a neutral
+  `link:src/io/openems/edge/meter/mqtt/api/MeterSample.java[MeterSample]`.
+- A Meter component (e.g. `io.openems.edge.meter.mqtt.shelly`) that owns the `BridgeMqtt` reference,
+  the OpenEMS `Config`/Channels, sign-convention (`invert`), `MeterType` handling and energy
+  integration. It is generic and does not need to change when a new adapter is added.
+
+This mirrors how `io.openems.edge.bridge.modbus` separates the Bridge (transport) from
+`ElementToChannelConverter`/Task definitions (payload interpretation) per Modbus device.
+
+== Adding a new device family (e.g. WhatWatt Go, G-Plug)
+
+1. Create a new bundle, e.g. `io.openems.edge.meter.mqtt.<family>`.
+2. Implement `MqttMeterAdapter` for that device's topic/payload format. The adapter is
+   responsible for:
+   - returning the MQTT topic filter to subscribe to (relative to the device's topic prefix)
+   - parsing incoming messages into a `MeterSample`, already normalized to OpenEMS' sign
+     convention (positive = consumption/import, negative = feed-in/export) for the *device
+     family*. Per-installation wiring issues are handled separately by the Meter's `invert`
+     Config flag - do not conflate the two.
+3. Copy `io.openems.edge.meter.mqtt.shelly.MeterMqttShellyImpl` as a starting point for the
+   Meter component (Config, `@Component`, `BridgeMqtt` reference, energy integration). Swap in
+   the new adapter and adjust the Config fields to whatever the new device needs (e.g. no
+   `channel` selector if the device only has one channel).
+
+No changes to `io.openems.edge.bridge.mqtt` or this API bundle are required.

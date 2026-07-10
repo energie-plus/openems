@@ -1,0 +1,77 @@
+= Shelly Gen2 Meter via MQTT
+
+Implements an OpenEMS `ElectricityMeter` for one energy-monitoring channel (`em1:0`, `em1:1`,
+...) of a Shelly Gen2 RPC device (e.g. Shelly Pro EM-50), received over MQTT via the generic
+`io.openems.edge.bridge.mqtt` Bridge.
+
+== Prerequisites
+
+- A `Bridge.Mqtt` Component instance pointed at your broker, with the credentials of the
+  device's MQTT user (see the broker's ACL: one user per physical device, restricted to its
+  own topic namespace).
+- The device must publish Shelly Gen2 RPC notifications under
+  `<topicPrefix>/events/rpc` and, if available, its online state under `<topicPrefix>/online`.
+
+== Config
+
+|===
+| Field | Description
+
+| `mqtt_id`     | ID of the `Bridge.Mqtt` Component instance for this device.
+| `topicPrefix` | The device's MQTT topic prefix (usually equal to its MQTT username, e.g. `shelly01`).
+| `channel`     | Which Shelly `em1:x` channel to read (`0` or `1`).
+| `phase`       | Which physical phase this channel represents (for `SinglePhaseMeter`).
+| `type`        | `MeterType` (`GRID`, `PRODUCTION`, `CONSUMPTION_METERED`, `CONSUMPTION_NOT_METERED`, ...).
+| `invert`      | Inverts power/current sign; use this to fix reversed CT-clamp wiring, not device-family sign conventions (those are handled by the adapter).
+| `addToSum`    | Whether to include this Meter in the system-wide Sum (`_sum/GridActivePower` etc.). Default `false` - use this for Meters that represent a third-party/community participant (e.g. a vZEV member) rather than a physically local circuit. Set to `true` to (temporarily) treat it as a normal additional local Meter, e.g. for testing.
+|===
+
+== Adding another Shelly Gen2 device or channel
+
+Just add another Component instance of `Meter.Mqtt.Shelly` with its own `mqtt_id` (pointing at
+that device's own `Bridge.Mqtt` instance / credentials) and `channel`. No code changes needed.
+
+For a *different* device family (non-Shelly), see the readme of
+`io.openems.edge.meter.mqtt.api`.
+
+== Testing against a live broker
+
+Example against a broker at `<broker-host>:8883` with a device user `shelly01`. Replace
+`<broker-host>` with your own broker's hostname.
+
+1. *(Optional) Verify the device is actually publishing*, independent of OpenEMS, using
+   `mosquitto_sub`:
++
+[source,shell]
+----
+mosquitto_sub -h <broker-host> -p 8883 --tls-version tlsv1.2 \
+  -u shelly01 -P <shelly01-password> -t 'shelly01/#' -v
+----
++
+You should see `shelly01/online true` and, every few seconds,
+`shelly01/events/rpc {"src":...,"method":"NotifyStatus",...}`.
+
+2. *Create a `Bridge.Mqtt` Component* (Apache Felix Web Console / OpenEMS UI "Components"):
+   `id=mqtt_shelly01`, `host=<broker-host>`, `port=8883`, `secureConnect=true`,
+   `username=shelly01`, `password=<shelly01-password>`.
++
+Check its `CONNECTED` Channel becomes `true`.
+
+3. *Create a `Meter.Mqtt.Shelly` Component*: `id=meter0`, `mqtt_id=mqtt_shelly01`,
+   `topicPrefix=shelly01`, `channel=0` (the wired em1:0 input), `phase=L1`,
+   `type=GRID` (or `PRODUCTION`, depending on what the facade PV feeds into),
+   `addToSum=false` (default - this meter represents an external/community participant).
+
+4. *Watch the Channels* in the OpenEMS UI/Live view or via the JSON-RPC `getChannelsValues`
+   query: `ActivePower` should track the sign convention from step 1 (negative while the
+   facade PV is feeding in), `Voltage`/`Current`/`Frequency` should update on every
+   `NotifyStatus` event, and `MqttCommunicationFailed` should stay `false`.
+
+5. *Test the offline path*: power down the Shelly (or block it at the broker). Once
+   `shelly01/online` flips to `false`, `ActivePower`/`Voltage`/`Current`/`Frequency` should
+   go to `UNDEFINED` and `MqttCommunicationFailed` should become `true`. Powering it back
+   on should clear both again on the next `NotifyStatus` event.
+
+6. *Unused channel `em1:1`*: leave it unconfigured (no second Meter instance), or add a
+   second `Meter.Mqtt.Shelly` instance with `channel=1` if you want to see its near-zero
+   readings for completeness - it does not need a real CT clamp to be added.
