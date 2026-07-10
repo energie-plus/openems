@@ -29,6 +29,7 @@ INTEGRATION_FEATURES=(
   "feature/shelly-pro-em50"
   "feature/x500-gpio-v2"
   "feature/goodwe-15k-et-export-limit"
+  "feature/remote-meter-through-mqtt"
 )
 
 # ---------------------------------------------------------------------------
