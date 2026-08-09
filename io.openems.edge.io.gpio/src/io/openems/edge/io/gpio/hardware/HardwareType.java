@@ -8,6 +8,7 @@ public enum HardwareType {
 	MODBERRY_X500_M40804_WB, //
 	MODBERRY_X500_M4S, //
 	MODBERRY_X500_M4S_F, //
+	MODBERRY_X500_M4S_GEN3, //
 	MODBERRY_X500_M3;
 
 	/**
@@ -22,7 +23,7 @@ public enum HardwareType {
 		case MODBERRY_X500_M41601WB_MAX -> new ModberryX500M41601WbMax(factory);
 		case MODBERRY_X500_M40804_MAX -> new ModberryX500M40804Max(factory);
 		case MODBERRY_X500_M40804_WB -> new ModberryX500M40804Wb(factory);
-		case MODBERRY_X500_M4S, MODBERRY_X500_M4S_F, MODBERRY_X500_M3 -> new ModberryX500M4S(factory);
+		case MODBERRY_X500_M4S, MODBERRY_X500_M4S_F, MODBERRY_X500_M3, MODBERRY_X500_M4S_GEN3 -> new ModberryX500M4S(factory);
 		};
 	}
 }
