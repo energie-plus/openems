@@ -30,6 +30,7 @@ INTEGRATION_FEATURES=(
   "feature/x500-gpio-v2"
   "feature/goodwe-15k-et-export-limit"
   "feature/remote-meter-through-mqtt"
+  "feature/limit-supply-to-external-consumption"
 )
 
 # ---------------------------------------------------------------------------
