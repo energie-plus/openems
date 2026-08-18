@@ -31,6 +31,7 @@ INTEGRATION_FEATURES=(
   "feature/goodwe-15k-et-export-limit"
   "feature/remote-meter-through-mqtt"
   "feature/limit-supply-to-external-consumption"
+  "feature/meter-mqtt-whatwatt"
 )
 
 # ---------------------------------------------------------------------------
