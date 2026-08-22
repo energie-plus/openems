@@ -32,6 +32,7 @@ INTEGRATION_FEATURES=(
   "feature/remote-meter-through-mqtt"
   "feature/limit-supply-to-external-consumption"
   "feature/meter-mqtt-whatwatt"
+  "feature/shelly3em-energy-registers"
 )
 
 # ---------------------------------------------------------------------------
