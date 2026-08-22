@@ -48,19 +48,25 @@ public class IoShelly3EmImplTest {
 									      "power": 8.52,
 									      "current": 1,
 									      "voltage": 230,
-									      "is_valid": true
+									      "is_valid": true,
+									      "total": 600,
+									      "total_returned": 1200
 									    },
 									    {
 									      "power": 31.39,
 									      "current": 2,
 									      "voltage": 231,
-									      "is_valid": true
+									      "is_valid": true,
+									      "total": 1200,
+									      "total_returned": 2400
 									    },
 									    {
 									      "power": 58.75,
 									      "current": 3,
 									      "voltage": 232,
-									      "is_valid": false
+									      "is_valid": false,
+									      "total": 1800,
+									      "total_returned": 3600
 									    }
 									  ],
 									  "total_power": 35.88,
@@ -92,8 +98,8 @@ public class IoShelly3EmImplTest {
 						.output(ElectricityMeter.ChannelId.CURRENT_L1, 1000) //
 						.output(ElectricityMeter.ChannelId.CURRENT_L2, 2000) //
 						.output(ElectricityMeter.ChannelId.CURRENT_L3, 3000) //
-						.output(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY, null) //
-						.output(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY, null) //
+						.output(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY, 60L) //
+						.output(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY, 120L) //
 						.output(IoShelly3Em.ChannelId.RELAY_OVERPOWER_EXCEPTION, false) //
 						.output(IoShelly3Em.ChannelId.HAS_UPDATE, false) //
 						.output(IoShelly3Em.ChannelId.EMETER1_EXCEPTION, false) //
@@ -120,8 +126,11 @@ public class IoShelly3EmImplTest {
 						.output(ElectricityMeter.ChannelId.CURRENT_L1, null) //
 						.output(ElectricityMeter.ChannelId.CURRENT_L2, null) //
 						.output(ElectricityMeter.ChannelId.CURRENT_L3, null) //
-						.output(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY, null) //
-						.output(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY, null) //
+						// Cumulated channels are never reset to null by the framework (see
+						// AbstractReadChannel#_setNextValue) - they hold their last known value
+						// through a communication failure instead of dropping to undefined.
+						.output(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY, 60L) //
+						.output(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY, 120L) //
 						.output(IoShelly3Em.ChannelId.RELAY_OVERPOWER_EXCEPTION, false) //
 						.output(IoShelly3Em.ChannelId.HAS_UPDATE, false) //
 						.output(IoShelly3Em.ChannelId.EMETER1_EXCEPTION, false) //
@@ -180,19 +189,25 @@ public class IoShelly3EmImplTest {
 									      "power": 8.52,
 									      "current": 1,
 									      "voltage": 230,
-									      "is_valid": true
+									      "is_valid": true,
+									      "total": 600,
+									      "total_returned": 1200
 									    },
 									    {
 									      "power": 31.39,
 									      "current": 2,
 									      "voltage": 231,
-									      "is_valid": true
+									      "is_valid": true,
+									      "total": 1200,
+									      "total_returned": 2400
 									    },
 									    {
 									      "power": 58.75,
 									      "current": 3,
 									      "voltage": 232,
-									      "is_valid": false
+									      "is_valid": false,
+									      "total": 1800,
+									      "total_returned": 3600
 									    }
 									  ],
 									  "total_power": 35.88,
@@ -224,8 +239,8 @@ public class IoShelly3EmImplTest {
 						.output(ElectricityMeter.ChannelId.CURRENT_L1, -1000) //
 						.output(ElectricityMeter.ChannelId.CURRENT_L2, -2000) //
 						.output(ElectricityMeter.ChannelId.CURRENT_L3, -3000) //
-						.output(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY, null) //
-						.output(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY, null) //
+						.output(ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY, 120L) //
+						.output(ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY, 60L) //
 						.output(IoShelly3Em.ChannelId.RELAY_OVERPOWER_EXCEPTION, false) //
 						.output(IoShelly3Em.ChannelId.HAS_UPDATE, false) //
 						.output(IoShelly3Em.ChannelId.EMETER1_EXCEPTION, false) //
