@@ -1,0 +1,16 @@
+= ESS Soc Reserve Estimator
+
+This Controller calculates a dynamic minimum State-of-Charge (Min-SoC) from consumption and
+production forecasts, instead of relying on a fixed, manually configured value.
+
+It sums up the forecasted own consumption minus the forecasted PV production up to the point where
+production is expected to exceed a configurable threshold again ("PV is producing again"), adds a
+configurable safety margin for forecast errors, and adds a fixed End-SoC Reserve that should remain
+even at that point (battery health / blackout reserve). The result is converted to a percentage
+using the referenced Ess's capacity, clamped to a configurable range, and published as a Channel.
+
+This Controller does not set any power constraints on the Ess itself - it is a pure calculation
+that publishes its result for other components to consume, e.g. as a dynamic reserve threshold for
+`Meter.Virtual.Gate`.
+
+https://github.com/OpenEMS/openems/tree/develop/io.openems.edge.controller.ess.socreserveestimator[Source Code icon:github[]]
