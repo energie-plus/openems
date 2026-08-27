@@ -33,6 +33,7 @@ INTEGRATION_FEATURES=(
   "feature/limit-supply-to-external-consumption"
   "feature/meter-mqtt-whatwatt"
   "feature/shelly3em-energy-registers"
+  "feature/dynamic-soc-reserve-estimator"
 )
 
 # ---------------------------------------------------------------------------
