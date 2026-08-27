@@ -111,19 +111,36 @@ public class SocReserveCalculator {
 	}
 
 	/**
-	 * Finds the first quarter within {@link #MAX_HORIZON_LOOKAHEAD_HOURS} whose
-	 * forecasted production reaches {@code productionThresholdW}.
+	 * Finds the next quarter within {@link #MAX_HORIZON_LOOKAHEAD_HOURS} whose
+	 * forecasted production reaches {@code productionThresholdW} again, after a
+	 * preceding quarter where it was below the threshold.
 	 *
-	 * @return the horizon; or {@code null} if none was found
+	 * <p>
+	 * Requiring a preceding dip is essential: if called while production is
+	 * currently already above the threshold (e.g. a sunny afternoon), the naive
+	 * "first quarter >= threshold" would trivially resolve to right now, ignoring
+	 * the coming night entirely. Waiting for a dip first means the search skips
+	 * over the remaining daylight, finds dusk, and only then looks for the actual
+	 * next sunrise.
+	 *
+	 * @return the horizon; or {@code null} if no such dip-then-rise was found
 	 */
 	private static Instant findHorizon(Prediction production, Instant now, int productionThresholdW) {
 		if (production == null || production.isEmpty()) {
 			return null;
 		}
+		var sawDip = new boolean[] { false };
 		return streamQuartersExclusive(now, now.plus(MAX_HORIZON_LOOKAHEAD_HOURS, ChronoUnit.HOURS)) //
 				.filter(t -> {
 					var value = production.getAt(t);
-					return value != null && value >= productionThresholdW;
+					if (value == null) {
+						return false;
+					}
+					if (value < productionThresholdW) {
+						sawDip[0] = true;
+						return false;
+					}
+					return sawDip[0];
 				}) //
 				.findFirst() //
 				.orElse(null);

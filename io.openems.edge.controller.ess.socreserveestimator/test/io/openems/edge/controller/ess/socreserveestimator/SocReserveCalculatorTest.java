@@ -55,6 +55,33 @@ public class SocReserveCalculatorTest {
 	}
 
 	@Test
+	public void productionAlreadyAboveThreshold_horizonSkipsToNextDawn() {
+		// Currently sunny (production already above threshold right now) must not
+		// collapse the horizon to "now" - that would ignore the coming night
+		// entirely. The search has to skip the remaining daylight, find dusk (first
+		// dip below threshold), and only then look for the next actual sunrise.
+		var productionValues = new Integer[33];
+		Arrays.fill(productionValues, 0);
+		productionValues[0] = 1200;
+		productionValues[1] = 1200;
+		productionValues[2] = 1200;
+		productionValues[3] = 1200;
+		productionValues[32] = 1200;
+		var production = Prediction.from(NOW, productionValues);
+		var consumption = Prediction.from(NOW, repeat(400, 32));
+
+		var result = SocReserveCalculator.calculate(consumption, production, NOW, THRESHOLD_W, FALLBACK_TIME, ZONE,
+				0.0, 0, 10_000, 5, 80);
+
+		assertEquals(NOW.plusSeconds(8 * 3600), result.horizon());
+		// Sunny quarters (0-3) contribute 0 (production covers consumption); night
+		// quarters (4-31, 28 quarters) contribute 400W * 0.25h = 100 Wh each.
+		assertEquals(2_800, result.requiredReserveEnergyWh());
+		assertEquals(28, result.calculatedMinSocPercent());
+		assertFalse(result.clamped());
+	}
+
+	@Test
 	public void energyBalance_sumsConsumptionMinusProductionOnly() {
 		// Isolate the plain energy balance: no safety margin, no End-SoC Reserve.
 		var production = Prediction.from(NOW, withSpikeAt(3, 2, 1200));
