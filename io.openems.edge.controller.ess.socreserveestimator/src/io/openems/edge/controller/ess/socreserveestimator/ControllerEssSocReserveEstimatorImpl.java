@@ -83,6 +83,7 @@ public class ControllerEssSocReserveEstimatorImpl extends AbstractOpenemsCompone
 				production, //
 				Instant.now(clock), //
 				this.config.productionThreshold(), //
+				LocalTime.parse(this.config.horizonSearchStartTime()), //
 				LocalTime.parse(this.config.fallbackHorizonTime()), //
 				clock.getZone(), //
 				this.config.safetyMargin(), //

@@ -35,7 +35,10 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 	@AttributeDefinition(name = "End-SoC Reserve [%]", description = "Fixed minimum SoC that should still remain once the reserve window ends, independent of forecast accuracy (battery health / blackout reserve)")
 	int endSocReserve() default 10;
 
-	@AttributeDefinition(name = "Fallback Horizon Time", description = "Local time (HH:mm) used as the reserve window end if the production forecast is missing or never reaches the threshold within 24h")
+	@AttributeDefinition(name = "Horizon Search Start Time", description = "Local time (HH:mm) before which threshold crossings are ignored when looking for the next production rise. Must be safely before the earliest possible sunrise, so a daytime dip (e.g. a passing thunderstorm) is never mistaken for nightfall")
+	String horizonSearchStartTime() default "04:00";
+
+	@AttributeDefinition(name = "Fallback Horizon Time", description = "Local time (HH:mm) used as the reserve window end if the production forecast is missing or never reaches the threshold within 24h of the search start")
 	String fallbackHorizonTime() default "08:00";
 
 	@AttributeDefinition(name = "Min-SoC Clamp Low [%]", description = "The calculated Min-SoC is never reported below this value")

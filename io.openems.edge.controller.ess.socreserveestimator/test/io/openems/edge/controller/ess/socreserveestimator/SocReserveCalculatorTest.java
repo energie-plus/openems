@@ -16,6 +16,14 @@ import io.openems.edge.predictor.api.prediction.Prediction;
 public class SocReserveCalculatorTest {
 
 	private static final Instant NOW = Instant.parse("2026-01-15T22:00:00Z");
+	/** Matches the real Config default - used wherever the anchor mechanic itself matters. */
+	private static final LocalTime SEARCH_START_TIME = LocalTime.of(4, 0);
+	/**
+	 * Just after {@link #NOW}'s time-of-day, so the search effectively starts
+	 * right away - used by tests that isolate a different calculation concern and
+	 * don't care about the anchor mechanic itself.
+	 */
+	private static final LocalTime IMMEDIATE_SEARCH_START_TIME = LocalTime.of(22, 15);
 	private static final LocalTime FALLBACK_TIME = LocalTime.of(8, 0);
 	private static final ZoneId ZONE = ZoneId.of("UTC");
 	private static final int THRESHOLD_W = 1000;
@@ -44,8 +52,8 @@ public class SocReserveCalculatorTest {
 		var production = Prediction.from(NOW, withSpikeAt(33, 32, 1200));
 		var consumption = Prediction.from(NOW, repeat(400, 32));
 
-		var result = SocReserveCalculator.calculate(consumption, production, NOW, THRESHOLD_W, FALLBACK_TIME, ZONE,
-				0.1, 10, 10_000, 5, 80);
+		var result = SocReserveCalculator.calculate(consumption, production, NOW, THRESHOLD_W, SEARCH_START_TIME,
+				FALLBACK_TIME, ZONE, 0.1, 10, 10_000, 5, 80);
 
 		assertEquals(NOW.plusSeconds(8 * 3600), result.horizon());
 		assertEquals(4520, result.requiredReserveEnergyWh()); // (400*0.25*32)*1.1 + 10%*10000
@@ -55,29 +63,33 @@ public class SocReserveCalculatorTest {
 	}
 
 	@Test
-	public void productionAlreadyAboveThreshold_horizonSkipsToNextDawn() {
-		// Currently sunny (production already above threshold right now) must not
-		// collapse the horizon to "now" - that would ignore the coming night
-		// entirely. The search has to skip the remaining daylight, find dusk (first
-		// dip below threshold), and only then look for the next actual sunrise.
+	public void daytimeDip_isIgnoredForHorizonButStillCountsInBalance() {
+		// A passing thunderstorm briefly drops production below the threshold in the
+		// early afternoon - this must NOT be mistaken for nightfall. The horizon
+		// search only starts at the configured search-start time (04:00, safely
+		// before sunrise), so the storm is entirely invisible to horizon detection.
+		// Its energy impact still correctly counts into the balance though, since
+		// that loop always runs from "now" all the way to the (correctly found)
+		// real horizon.
 		var productionValues = new Integer[33];
-		Arrays.fill(productionValues, 0);
-		productionValues[0] = 1200;
-		productionValues[1] = 1200;
-		productionValues[2] = 1200;
-		productionValues[3] = 1200;
-		productionValues[32] = 1200;
+		Arrays.fill(productionValues, 1200); // sunny all day by default
+		productionValues[10] = 200; // thunderstorm dip
+		productionValues[11] = 200;
+		for (var i = 24; i < 32; i++) {
+			productionValues[i] = 0; // real dusk through the night
+		}
+		// index 32 stays 1200 - the real dawn
 		var production = Prediction.from(NOW, productionValues);
 		var consumption = Prediction.from(NOW, repeat(400, 32));
 
-		var result = SocReserveCalculator.calculate(consumption, production, NOW, THRESHOLD_W, FALLBACK_TIME, ZONE,
-				0.0, 0, 10_000, 5, 80);
+		var result = SocReserveCalculator.calculate(consumption, production, NOW, THRESHOLD_W, SEARCH_START_TIME,
+				FALLBACK_TIME, ZONE, 0.0, 0, 10_000, 5, 80);
 
 		assertEquals(NOW.plusSeconds(8 * 3600), result.horizon());
-		// Sunny quarters (0-3) contribute 0 (production covers consumption); night
-		// quarters (4-31, 28 quarters) contribute 400W * 0.25h = 100 Wh each.
-		assertEquals(2_800, result.requiredReserveEnergyWh());
-		assertEquals(28, result.calculatedMinSocPercent());
+		// Storm: 2 quarters * (400-200)W * 0.25h = 100 Wh. Real night: 8 quarters *
+		// 400W * 0.25h = 800 Wh.
+		assertEquals(900, result.requiredReserveEnergyWh());
+		assertEquals(9, result.calculatedMinSocPercent());
 		assertFalse(result.clamped());
 	}
 
@@ -87,8 +99,8 @@ public class SocReserveCalculatorTest {
 		var production = Prediction.from(NOW, withSpikeAt(3, 2, 1200));
 		var consumption = Prediction.from(NOW, repeat(300, 2));
 
-		var result = SocReserveCalculator.calculate(consumption, production, NOW, THRESHOLD_W, FALLBACK_TIME, ZONE,
-				0.0, 0, 1_000, 5, 80);
+		var result = SocReserveCalculator.calculate(consumption, production, NOW, THRESHOLD_W,
+				IMMEDIATE_SEARCH_START_TIME, FALLBACK_TIME, ZONE, 0.0, 0, 1_000, 5, 80);
 
 		// 2 quarters * 300W * 0.25h = 150 Wh
 		assertEquals(150, result.requiredReserveEnergyWh());
@@ -105,8 +117,8 @@ public class SocReserveCalculatorTest {
 		var production = Prediction.from(NOW, productionValues);
 		var consumption = Prediction.from(NOW, repeat(300, 4));
 
-		var result = SocReserveCalculator.calculate(consumption, production, NOW, THRESHOLD_W, FALLBACK_TIME, ZONE,
-				0.0, 0, 1_000, 5, 80);
+		var result = SocReserveCalculator.calculate(consumption, production, NOW, THRESHOLD_W,
+				IMMEDIATE_SEARCH_START_TIME, FALLBACK_TIME, ZONE, 0.0, 0, 1_000, 5, 80);
 
 		// Only quarters 0, 1, 3 count: 3 * 300W * 0.25h = 225 Wh
 		assertEquals(225, result.requiredReserveEnergyWh());
@@ -116,7 +128,7 @@ public class SocReserveCalculatorTest {
 	@Test
 	public void emptyProductionPrediction_fallsBackToFixedHorizon() {
 		var result = SocReserveCalculator.calculate(Prediction.EMPTY_PREDICTION, Prediction.EMPTY_PREDICTION, NOW,
-				THRESHOLD_W, FALLBACK_TIME, ZONE, 0.1, 10, 10_000, 5, 80);
+				THRESHOLD_W, SEARCH_START_TIME, FALLBACK_TIME, ZONE, 0.1, 10, 10_000, 5, 80);
 
 		// NOW is 22:00 UTC, 08:00 has already passed today -> next occurrence is
 		// tomorrow.
@@ -134,7 +146,7 @@ public class SocReserveCalculatorTest {
 		var earlyNow = Instant.parse("2026-01-15T05:00:00Z");
 
 		var result = SocReserveCalculator.calculate(Prediction.EMPTY_PREDICTION, Prediction.EMPTY_PREDICTION,
-				earlyNow, THRESHOLD_W, FALLBACK_TIME, ZONE, 0.0, 0, 10_000, 5, 80);
+				earlyNow, THRESHOLD_W, SEARCH_START_TIME, FALLBACK_TIME, ZONE, 0.0, 0, 10_000, 5, 80);
 
 		assertEquals(Instant.parse("2026-01-15T08:00:00Z"), result.horizon());
 	}
@@ -146,8 +158,8 @@ public class SocReserveCalculatorTest {
 		var production = Prediction.from(NOW, new Integer[] { 300, 1200 });
 		var consumption = Prediction.from(NOW, new Integer[] { 200 });
 
-		var result = SocReserveCalculator.calculate(consumption, production, NOW, THRESHOLD_W, FALLBACK_TIME, ZONE,
-				0.0, 10, 8_000, 5, 80);
+		var result = SocReserveCalculator.calculate(consumption, production, NOW, THRESHOLD_W,
+				IMMEDIATE_SEARCH_START_TIME, FALLBACK_TIME, ZONE, 0.0, 10, 8_000, 5, 80);
 
 		assertEquals(800, result.requiredReserveEnergyWh()); // 10% of 8'000 Wh, nothing else
 		assertEquals(10, result.calculatedMinSocPercent());
@@ -159,8 +171,8 @@ public class SocReserveCalculatorTest {
 		var production = Prediction.from(NOW, withSpikeAt(2, 1, 1200));
 		var consumption = Prediction.from(NOW, new Integer[] { 400 });
 
-		var result = SocReserveCalculator.calculate(consumption, production, NOW, THRESHOLD_W, FALLBACK_TIME, ZONE,
-				0.5, 0, 1_000, 5, 80);
+		var result = SocReserveCalculator.calculate(consumption, production, NOW, THRESHOLD_W,
+				IMMEDIATE_SEARCH_START_TIME, FALLBACK_TIME, ZONE, 0.5, 0, 1_000, 5, 80);
 
 		// 400W * 0.25h = 100 Wh, * 1.5 safety margin = 150 Wh
 		assertEquals(150, result.requiredReserveEnergyWh());
@@ -172,8 +184,8 @@ public class SocReserveCalculatorTest {
 		var production = Prediction.from(NOW, withSpikeAt(2, 1, 1200));
 		var consumption = Prediction.from(NOW, new Integer[] { 300 });
 
-		var result = SocReserveCalculator.calculate(consumption, production, NOW, THRESHOLD_W, FALLBACK_TIME, ZONE,
-				0.0, 0, 10_000, 5, 80);
+		var result = SocReserveCalculator.calculate(consumption, production, NOW, THRESHOLD_W,
+				IMMEDIATE_SEARCH_START_TIME, FALLBACK_TIME, ZONE, 0.0, 0, 10_000, 5, 80);
 
 		assertEquals(5, result.calculatedMinSocPercent());
 		assertTrue(result.clamped());
@@ -184,8 +196,8 @@ public class SocReserveCalculatorTest {
 		var production = Prediction.from(NOW, withSpikeAt(5, 4, 1200));
 		var consumption = Prediction.from(NOW, repeat(5000, 4));
 
-		var result = SocReserveCalculator.calculate(consumption, production, NOW, THRESHOLD_W, FALLBACK_TIME, ZONE,
-				0.0, 0, 1_000, 5, 80);
+		var result = SocReserveCalculator.calculate(consumption, production, NOW, THRESHOLD_W,
+				IMMEDIATE_SEARCH_START_TIME, FALLBACK_TIME, ZONE, 0.0, 0, 1_000, 5, 80);
 
 		assertEquals(5_000, result.requiredReserveEnergyWh()); // 4 * 5000W * 0.25h
 		assertEquals(80, result.calculatedMinSocPercent());
@@ -195,7 +207,7 @@ public class SocReserveCalculatorTest {
 	@Test
 	public void zeroCapacity_returnsSafeFallback() {
 		var result = SocReserveCalculator.calculate(Prediction.EMPTY_PREDICTION, Prediction.EMPTY_PREDICTION, NOW,
-				THRESHOLD_W, FALLBACK_TIME, ZONE, 0.1, 10, 0, 5, 80);
+				THRESHOLD_W, SEARCH_START_TIME, FALLBACK_TIME, ZONE, 0.1, 10, 0, 5, 80);
 
 		assertEquals(0, result.requiredReserveEnergyWh());
 		assertEquals(80, result.calculatedMinSocPercent());

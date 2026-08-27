@@ -59,10 +59,14 @@ public class SocReserveCalculator {
 	 * @param now                   the current point in time
 	 * @param productionThresholdW  forecasted production at or above this value
 	 *                              marks the end of the reserve window [W]
+	 * @param horizonSearchStartTime local time from which onward the search for a
+	 *                              threshold crossing starts (see
+	 *                              {@link #findHorizon}); should be safely before
+	 *                              the earliest possible sunrise
 	 * @param fallbackHorizonTime   local time used as horizon if the production
 	 *                              forecast never reaches the threshold
-	 * @param zone                  the zone {@code fallbackHorizonTime} is
-	 *                              interpreted in
+	 * @param zone                  the zone {@code horizonSearchStartTime} and
+	 *                              {@code fallbackHorizonTime} are interpreted in
 	 * @param safetyMargin          extra fraction added on top of the forecasted
 	 *                              energy need (0.1 = +10%)
 	 * @param endSocReservePercent  fixed minimum SoC that should remain at the
@@ -73,8 +77,9 @@ public class SocReserveCalculator {
 	 * @return the {@link Result}
 	 */
 	public static Result calculate(Prediction consumption, Prediction production, Instant now,
-			int productionThresholdW, LocalTime fallbackHorizonTime, ZoneId zone, double safetyMargin,
-			int endSocReservePercent, int capacityWh, int clampLowPercent, int clampHighPercent) {
+			int productionThresholdW, LocalTime horizonSearchStartTime, LocalTime fallbackHorizonTime, ZoneId zone,
+			double safetyMargin, int endSocReservePercent, int capacityWh, int clampLowPercent,
+			int clampHighPercent) {
 		if (capacityWh <= 0) {
 			// Cannot convert Wh to % without a valid capacity - fail safe towards
 			// "protect everything" instead of dividing by zero.
@@ -83,7 +88,7 @@ public class SocReserveCalculator {
 
 		var predictionIncomplete = false;
 
-		var horizon = findHorizon(production, now, productionThresholdW);
+		var horizon = findHorizon(production, now, productionThresholdW, horizonSearchStartTime, zone);
 		if (horizon == null) {
 			horizon = nextOccurrenceOf(fallbackHorizonTime, now, zone);
 			predictionIncomplete = true;
@@ -111,36 +116,39 @@ public class SocReserveCalculator {
 	}
 
 	/**
-	 * Finds the next quarter within {@link #MAX_HORIZON_LOOKAHEAD_HOURS} whose
-	 * forecasted production reaches {@code productionThresholdW} again, after a
-	 * preceding quarter where it was below the threshold.
+	 * Finds the next quarter at or after {@code searchStartTime} (see below)
+	 * within {@link #MAX_HORIZON_LOOKAHEAD_HOURS} whose forecasted production
+	 * reaches {@code productionThresholdW}.
 	 *
 	 * <p>
-	 * Requiring a preceding dip is essential: if called while production is
-	 * currently already above the threshold (e.g. a sunny afternoon), the naive
-	 * "first quarter >= threshold" would trivially resolve to right now, ignoring
-	 * the coming night entirely. Waiting for a dip first means the search skips
-	 * over the remaining daylight, finds dusk, and only then looks for the actual
-	 * next sunrise.
+	 * The search deliberately never looks at quarters before the next occurrence
+	 * of {@code searchStartTime} (e.g. 04:00), a fixed local time chosen to be
+	 * safely before the earliest possible sunrise. Two naive alternatives were
+	 * tried and rejected:
+	 * <ul>
+	 * <li>Searching from {@code now} for the first quarter >= threshold trivially
+	 * resolves to right now if called while production is already above the
+	 * threshold (e.g. a sunny afternoon), ignoring the coming night entirely.
+	 * <li>Requiring a preceding dip below the threshold before accepting a match
+	 * is fooled by any daytime dip - e.g. a passing thunderstorm - which then gets
+	 * mistaken for nightfall.
+	 * </ul>
+	 * Anchoring the search to a fixed pre-dawn time sidesteps both: daytime
+	 * fluctuations, however large, are never even considered, because the search
+	 * doesn't start until they are safely over.
 	 *
-	 * @return the horizon; or {@code null} if no such dip-then-rise was found
+	 * @return the horizon; or {@code null} if no matching quarter was found
 	 */
-	private static Instant findHorizon(Prediction production, Instant now, int productionThresholdW) {
+	private static Instant findHorizon(Prediction production, Instant now, int productionThresholdW,
+			LocalTime searchStartTime, ZoneId zone) {
 		if (production == null || production.isEmpty()) {
 			return null;
 		}
-		var sawDip = new boolean[] { false };
-		return streamQuartersExclusive(now, now.plus(MAX_HORIZON_LOOKAHEAD_HOURS, ChronoUnit.HOURS)) //
+		var searchStart = nextOccurrenceOf(searchStartTime, now, zone);
+		return streamQuartersExclusive(searchStart, searchStart.plus(MAX_HORIZON_LOOKAHEAD_HOURS, ChronoUnit.HOURS)) //
 				.filter(t -> {
 					var value = production.getAt(t);
-					if (value == null) {
-						return false;
-					}
-					if (value < productionThresholdW) {
-						sawDip[0] = true;
-						return false;
-					}
-					return sawDip[0];
+					return value != null && value >= productionThresholdW;
 				}) //
 				.findFirst() //
 				.orElse(null);
