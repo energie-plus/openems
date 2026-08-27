@@ -97,4 +97,9 @@ public class ControllerEssSocReserveEstimatorImpl extends AbstractOpenemsCompone
 		this._setPredictionIncomplete(result.predictionIncomplete());
 		this._setMinSocClamped(result.clamped());
 	}
+
+	@Override
+	public String debugLog() {
+		return "MinSoc:" + this.getCalculatedMinSoc().asString();
+	}
 }
