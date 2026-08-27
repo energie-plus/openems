@@ -34,6 +34,7 @@ INTEGRATION_FEATURES=(
   "feature/meter-mqtt-whatwatt"
   "feature/shelly3em-energy-registers"
   "feature/dynamic-soc-reserve-estimator"
+  "feature/gate-dynamic-reserve-soc"
 )
 
 # ---------------------------------------------------------------------------
