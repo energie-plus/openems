@@ -2,6 +2,7 @@ package io.openems.edge.controller.ess.socreserveestimator;
 
 import static io.openems.edge.common.type.QuarterlyValues.streamQuartersExclusive;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -59,14 +60,14 @@ public class SocReserveCalculator {
 	 * @param now                   the current point in time
 	 * @param productionThresholdW  forecasted production at or above this value
 	 *                              marks the end of the reserve window [W]
-	 * @param horizonSearchStartTime local time from which onward the search for a
-	 *                              threshold crossing starts (see
-	 *                              {@link #findHorizon}); should be safely before
-	 *                              the earliest possible sunrise
+	 * @param minimumDipDuration    how long forecasted production must stay below
+	 *                              the threshold before a subsequent rise counts
+	 *                              as the horizon (see {@link #findHorizon}); not
+	 *                              applied to a dip already in progress right now
 	 * @param fallbackHorizonTime   local time used as horizon if the production
 	 *                              forecast never reaches the threshold
-	 * @param zone                  the zone {@code horizonSearchStartTime} and
-	 *                              {@code fallbackHorizonTime} are interpreted in
+	 * @param zone                  the zone {@code fallbackHorizonTime} is
+	 *                              interpreted in
 	 * @param safetyMargin          extra fraction added on top of the forecasted
 	 *                              energy need (0.1 = +10%)
 	 * @param endSocReservePercent  fixed minimum SoC that should remain at the
@@ -77,7 +78,7 @@ public class SocReserveCalculator {
 	 * @return the {@link Result}
 	 */
 	public static Result calculate(Prediction consumption, Prediction production, Instant now,
-			int productionThresholdW, LocalTime horizonSearchStartTime, LocalTime fallbackHorizonTime, ZoneId zone,
+			int productionThresholdW, Duration minimumDipDuration, LocalTime fallbackHorizonTime, ZoneId zone,
 			double safetyMargin, int endSocReservePercent, int capacityWh, int clampLowPercent,
 			int clampHighPercent) {
 		if (capacityWh <= 0) {
@@ -88,7 +89,7 @@ public class SocReserveCalculator {
 
 		var predictionIncomplete = false;
 
-		var horizon = findHorizon(production, now, productionThresholdW, horizonSearchStartTime, zone);
+		var horizon = findHorizon(production, now, productionThresholdW, minimumDipDuration);
 		if (horizon == null) {
 			horizon = nextOccurrenceOf(fallbackHorizonTime, now, zone);
 			predictionIncomplete = true;
@@ -116,42 +117,74 @@ public class SocReserveCalculator {
 	}
 
 	/**
-	 * Finds the next quarter at or after {@code searchStartTime} (see below)
-	 * within {@link #MAX_HORIZON_LOOKAHEAD_HOURS} whose forecasted production
-	 * reaches {@code productionThresholdW}.
+	 * Finds the next quarter within {@link #MAX_HORIZON_LOOKAHEAD_HOURS} whose
+	 * forecasted production reaches {@code productionThresholdW} again, after a
+	 * qualifying dip below it.
 	 *
 	 * <p>
-	 * The search deliberately never looks at quarters before the next occurrence
-	 * of {@code searchStartTime} (e.g. 04:00), a fixed local time chosen to be
-	 * safely before the earliest possible sunrise. Two naive alternatives were
-	 * tried and rejected:
+	 * A dip qualifies in one of two ways:
+	 * <ul>
+	 * <li>It is already in progress at {@code now} (the very first quarter
+	 * examined is already below the threshold) - accepted immediately, no
+	 * duration required. If it's already low right now, that's simply the
+	 * current state, not something to second-guess.
+	 * <li>It starts only after the search has begun (i.e. production was still
+	 * above the threshold at {@code now}) - only accepted once it has lasted at
+	 * least {@code minimumDipDuration}, so a brief daytime dip (e.g. a passing
+	 * thunderstorm) can't be mistaken for nightfall.
+	 * </ul>
+	 * Two naive alternatives were tried and rejected before this:
 	 * <ul>
 	 * <li>Searching from {@code now} for the first quarter >= threshold trivially
 	 * resolves to right now if called while production is already above the
 	 * threshold (e.g. a sunny afternoon), ignoring the coming night entirely.
-	 * <li>Requiring a preceding dip below the threshold before accepting a match
-	 * is fooled by any daytime dip - e.g. a passing thunderstorm - which then gets
-	 * mistaken for nightfall.
+	 * <li>Anchoring the search to a fixed pre-dawn clock time (e.g. never search
+	 * before 04:00) avoided the thunderstorm problem, but broke the case where
+	 * {@code now} falls shortly after that anchor while still genuinely before
+	 * sunrise: the next occurrence of the anchor is then a full day away, wildly
+	 * overestimating the reserve. Found live by Simon on ems4 (05:23, production
+	 * already near zero, but the calculated horizon jumped to the next day).
 	 * </ul>
-	 * Anchoring the search to a fixed pre-dawn time sidesteps both: daytime
-	 * fluctuations, however large, are never even considered, because the search
-	 * doesn't start until they are safely over.
 	 *
-	 * @return the horizon; or {@code null} if no matching quarter was found
+	 * @return the horizon; or {@code null} if no qualifying dip-then-rise was
+	 *         found
 	 */
 	private static Instant findHorizon(Prediction production, Instant now, int productionThresholdW,
-			LocalTime searchStartTime, ZoneId zone) {
+			Duration minimumDipDuration) {
 		if (production == null || production.isEmpty()) {
 			return null;
 		}
-		var searchStart = nextOccurrenceOf(searchStartTime, now, zone);
-		return streamQuartersExclusive(searchStart, searchStart.plus(MAX_HORIZON_LOOKAHEAD_HOURS, ChronoUnit.HOURS)) //
-				.filter(t -> {
-					var value = production.getAt(t);
-					return value != null && value >= productionThresholdW;
-				}) //
-				.findFirst() //
-				.orElse(null);
+		var confirmedDip = false;
+		Instant dipStart = null;
+		var isFirstQuarter = true;
+		for (var t : streamQuartersExclusive(now, now.plus(MAX_HORIZON_LOOKAHEAD_HOURS, ChronoUnit.HOURS)).toList()) {
+			var value = production.getAt(t);
+			if (value == null) {
+				continue;
+			}
+			var wasFirstQuarter = isFirstQuarter;
+			isFirstQuarter = false;
+
+			if (value < productionThresholdW) {
+				if (!confirmedDip) {
+					if (wasFirstQuarter) {
+						confirmedDip = true;
+					} else if (dipStart == null) {
+						dipStart = t;
+					} else if (!Duration.between(dipStart, t).minus(minimumDipDuration).isNegative()) {
+						confirmedDip = true;
+					}
+				}
+				continue;
+			}
+
+			// value >= productionThresholdW
+			if (confirmedDip) {
+				return t;
+			}
+			dipStart = null; // discard any dip that was still too short when production recovered
+		}
+		return null;
 	}
 
 	/**

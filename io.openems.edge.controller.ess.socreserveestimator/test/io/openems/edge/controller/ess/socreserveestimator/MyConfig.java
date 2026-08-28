@@ -12,7 +12,7 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private int productionThreshold = 1000;
 		private double safetyMargin = 0.1;
 		private int endSocReserve = 10;
-		private String horizonSearchStartTime = "04:00";
+		private int minimumDipDurationMinutes = 60;
 		private String fallbackHorizonTime = "08:00";
 		private int minSocClampLow = 5;
 		private int minSocClampHigh = 80;
@@ -45,8 +45,8 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 			return this;
 		}
 
-		public Builder setHorizonSearchStartTime(String horizonSearchStartTime) {
-			this.horizonSearchStartTime = horizonSearchStartTime;
+		public Builder setMinimumDipDurationMinutes(int minimumDipDurationMinutes) {
+			this.minimumDipDurationMinutes = minimumDipDurationMinutes;
 			return this;
 		}
 
@@ -107,8 +107,8 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	}
 
 	@Override
-	public String horizonSearchStartTime() {
-		return this.builder.horizonSearchStartTime;
+	public int minimumDipDurationMinutes() {
+		return this.builder.minimumDipDurationMinutes;
 	}
 
 	@Override

@@ -1,5 +1,6 @@
 package io.openems.edge.controller.ess.socreserveestimator;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
 
@@ -83,7 +84,7 @@ public class ControllerEssSocReserveEstimatorImpl extends AbstractOpenemsCompone
 				production, //
 				Instant.now(clock), //
 				this.config.productionThreshold(), //
-				LocalTime.parse(this.config.horizonSearchStartTime()), //
+				Duration.ofMinutes(this.config.minimumDipDurationMinutes()), //
 				LocalTime.parse(this.config.fallbackHorizonTime()), //
 				clock.getZone(), //
 				this.config.safetyMargin(), //
