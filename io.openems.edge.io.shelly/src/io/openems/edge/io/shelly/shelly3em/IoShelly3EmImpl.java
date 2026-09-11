@@ -199,14 +199,18 @@ public class IoShelly3EmImpl extends AbstractOpenemsComponent
 					}
 				}
 
+				// "total" accumulates while the (raw, pre-invert) phase power is >= 0, "total_returned"
+				// while it is negative - same convention ElectricityMeter uses for ActivePower: >= 0 is
+				// Production, < 0 is Consumption. So without inversion, "total" maps to Production and
+				// "total_returned" to Consumption; inversion flips both, same as it flips ActivePower.
 				var consumptionWh = Math.round(totalWmin / 60f);
 				var productionWh = Math.round(totalReturnedWmin / 60f);
 				if (this.invert) {
-					consumptionEnergy = (long) productionWh;
-					productionEnergy = (long) consumptionWh;
-				} else {
 					consumptionEnergy = (long) consumptionWh;
 					productionEnergy = (long) productionWh;
+				} else {
+					consumptionEnergy = (long) productionWh;
+					productionEnergy = (long) consumptionWh;
 				}
 
 			} catch (OpenemsNamedException e) {
