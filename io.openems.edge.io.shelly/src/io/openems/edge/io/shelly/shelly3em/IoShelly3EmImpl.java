@@ -5,15 +5,11 @@ import static io.openems.common.utils.JsonUtils.getAsFloat;
 import static io.openems.common.utils.JsonUtils.getAsJsonArray;
 import static io.openems.common.utils.JsonUtils.getAsJsonObject;
 import static io.openems.edge.common.channel.ChannelUtils.setValue;
-import static io.openems.edge.common.event.EdgeEventConstants.TOPIC_CYCLE_AFTER_PROCESS_IMAGE;
 import static io.openems.edge.common.event.EdgeEventConstants.TOPIC_CYCLE_EXECUTE_WRITE;
 import static io.openems.edge.io.shelly.common.Utils.executeWrite;
 import static io.openems.edge.io.shelly.common.Utils.generateDebugLog;
 import static java.lang.Math.round;
 import static org.osgi.service.component.annotations.ConfigurationPolicy.REQUIRE;
-import static org.osgi.service.component.annotations.ReferenceCardinality.OPTIONAL;
-import static org.osgi.service.component.annotations.ReferencePolicy.DYNAMIC;
-import static org.osgi.service.component.annotations.ReferencePolicyOption.GREEDY;
 
 import java.util.function.IntFunction;
 
@@ -42,9 +38,6 @@ import io.openems.edge.common.component.AbstractOpenemsComponent;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.io.api.DigitalOutput;
 import io.openems.edge.meter.api.ElectricityMeter;
-import io.openems.edge.timedata.api.Timedata;
-import io.openems.edge.timedata.api.TimedataProvider;
-import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 
 @Designate(ocd = Config.class, factory = true)
 @Component(//
@@ -52,16 +45,10 @@ import io.openems.edge.timedata.api.utils.CalculateEnergyFromPower;
 		immediate = true, //
 		configurationPolicy = REQUIRE)
 @EventTopics({ //
-		TOPIC_CYCLE_AFTER_PROCESS_IMAGE, //
 		TOPIC_CYCLE_EXECUTE_WRITE //
 })
 public class IoShelly3EmImpl extends AbstractOpenemsComponent
-		implements IoShelly3Em, DigitalOutput, ElectricityMeter, OpenemsComponent, TimedataProvider, EventHandler {
-
-	private final CalculateEnergyFromPower calculateProductionEnergy = new CalculateEnergyFromPower(this,
-			ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY);
-	private final CalculateEnergyFromPower calculateConsumptionEnergy = new CalculateEnergyFromPower(this,
-			ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY);
+		implements IoShelly3Em, DigitalOutput, ElectricityMeter, OpenemsComponent, EventHandler {
 
 	private final Logger log = LoggerFactory.getLogger(IoShelly3EmImpl.class);
 	private final BooleanWriteChannel[] digitalOutputChannels;
@@ -69,9 +56,6 @@ public class IoShelly3EmImpl extends AbstractOpenemsComponent
 	private MeterType meterType = null;
 	private boolean invert = false;
 	private String baseUrl;
-
-	@Reference(policy = DYNAMIC, policyOption = GREEDY, cardinality = OPTIONAL)
-	private volatile Timedata timedata;
 
 	@Reference
 	private BridgeHttpFactory httpBridgeFactory;
@@ -131,8 +115,6 @@ public class IoShelly3EmImpl extends AbstractOpenemsComponent
 		}
 
 		switch (event.getTopic()) {
-		case TOPIC_CYCLE_AFTER_PROCESS_IMAGE //
-			-> this.calculateEnergy();
 		case TOPIC_CYCLE_EXECUTE_WRITE //
 			-> executeWrite(this.getRelayChannel(), this.baseUrl, this.httpBridge, 0);
 		}
@@ -155,6 +137,8 @@ public class IoShelly3EmImpl extends AbstractOpenemsComponent
 		Integer currentL1 = null;
 		Integer currentL2 = null;
 		Integer currentL3 = null;
+		Long consumptionEnergy = null;
+		Long productionEnergy = null;
 		boolean hasUpdate = false;
 		boolean overpower = false;
 
@@ -178,12 +162,20 @@ public class IoShelly3EmImpl extends AbstractOpenemsComponent
 				activePower = round(getAsFloat(response, "total_power"));
 
 				var emeters = getAsJsonArray(response, "emeters");
+				// Shelly reports 'total'/'total_returned' per phase in Watt-minutes - the device's
+				// own cumulative meter registers, not integrated on-edge from power. Summed across
+				// phases and converted to Wh, so a lost poll or an OpenEMS restart never causes the
+				// accumulated energy to drift or jump.
+				var totalWmin = 0f;
+				var totalReturnedWmin = 0f;
 				for (int i = 0; i < emeters.size(); i++) {
 					var emeter = getAsJsonObject(emeters.get(i));
 					var power = invert.apply(round(getAsFloat(emeter, "power")));
 					var voltage = round(getAsFloat(emeter, "voltage") * 1000);
 					var current = invert.apply(round(getAsFloat(emeter, "current") * 1000));
 					var isValid = getAsBoolean(emeter, "is_valid");
+					totalWmin += getAsFloat(emeter, "total");
+					totalReturnedWmin += getAsFloat(emeter, "total_returned");
 
 					switch (i + 1 /* phase */) {
 					case 1 -> {
@@ -207,6 +199,20 @@ public class IoShelly3EmImpl extends AbstractOpenemsComponent
 					}
 				}
 
+				// "total" accumulates while the (raw, pre-invert) phase power is >= 0, "total_returned"
+				// while it is negative - same convention ElectricityMeter uses for ActivePower: >= 0 is
+				// Production, < 0 is Consumption. So without inversion, "total" maps to Production and
+				// "total_returned" to Consumption; inversion flips both, same as it flips ActivePower.
+				var consumptionWh = Math.round(totalWmin / 60f);
+				var productionWh = Math.round(totalReturnedWmin / 60f);
+				if (this.invert) {
+					consumptionEnergy = (long) consumptionWh;
+					productionEnergy = (long) productionWh;
+				} else {
+					consumptionEnergy = (long) productionWh;
+					productionEnergy = (long) consumptionWh;
+				}
+
 			} catch (OpenemsNamedException e) {
 				this.logDebug(this.log, e.getMessage());
 			}
@@ -216,6 +222,8 @@ public class IoShelly3EmImpl extends AbstractOpenemsComponent
 		this._setRelay(relay0);
 		setValue(this, IoShelly3Em.ChannelId.RELAY_OVERPOWER_EXCEPTION, overpower);
 		this._setActivePower(activePower);
+		this._setActiveConsumptionEnergy(consumptionEnergy);
+		this._setActiveProductionEnergy(productionEnergy);
 		setValue(this, IoShelly3Em.ChannelId.HAS_UPDATE, hasUpdate);
 
 		this._setActivePowerL1(activePowerL1);
@@ -229,29 +237,6 @@ public class IoShelly3EmImpl extends AbstractOpenemsComponent
 		this._setActivePowerL3(activePowerL3);
 		this._setVoltageL3(voltageL3);
 		this._setCurrentL3(currentL3);
-	}
-
-	/**
-	 * Calculate the Energy values from ActivePower.
-	 */
-	private void calculateEnergy() {
-		// Calculate Energy
-		final var activePower = this.getActivePower().get();
-		if (activePower == null) {
-			this.calculateProductionEnergy.update(null);
-			this.calculateConsumptionEnergy.update(null);
-		} else if (activePower >= 0) {
-			this.calculateProductionEnergy.update(activePower);
-			this.calculateConsumptionEnergy.update(0);
-		} else {
-			this.calculateProductionEnergy.update(0);
-			this.calculateConsumptionEnergy.update(-activePower);
-		}
-	}
-
-	@Override
-	public Timedata getTimedata() {
-		return this.timedata;
 	}
 
 	@Override
