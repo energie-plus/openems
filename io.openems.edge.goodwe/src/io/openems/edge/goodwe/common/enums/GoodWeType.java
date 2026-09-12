@@ -19,6 +19,7 @@ public enum GoodWeType implements OptionsEnum {
 	GOODWE_10K_ET(20, "GoodWe GW10K-ET", Series.ET, 25), //
 	GOODWE_8K_ET(21, "GoodWe GW8K-ET", Series.ET, 25), //
 	GOODWE_5K_ET(22, "GoodWe GW5K-ET", Series.ET, 25), //
+	GOODWE_15K_ET(23, "GoodWe GW15K-ET", Series.ET, 25), //
 	FENECON_FHI_10_DAH(30, "FENECON FHI 10 DAH", Series.ET, //
 			authorisedLimit(25, 25, 0), serialNrFilter("010K", "ETU"), notHomeBattery52Ah(), 10_000, 10_000), //
 	FENECON_FHI_20_DAH(120, "FENECON FHI 20 DAH", Series.ETT, //
