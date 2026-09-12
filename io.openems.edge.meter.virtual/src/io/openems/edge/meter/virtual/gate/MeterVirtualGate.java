@@ -13,7 +13,15 @@ public interface MeterVirtualGate extends ElectricityMeter, OpenemsComponent, Mo
 
 	public enum ChannelId implements io.openems.edge.common.channel.ChannelId {
 		GATE_CLOSED(Doc.of(Level.INFO) //
-				.text("Gated Meter is suppressed to zero because Ess State-of-Charge is at or below the reserve threshold")); //
+				.text("Gated Meter is suppressed to zero because Ess State-of-Charge is at or below the reserve threshold")), //
+
+		/**
+		 * Set if 'Reserve SoC Channel' is configured but its value is currently
+		 * undefined or unresolvable, so the fixed 'Reserve SoC' value is used
+		 * instead.
+		 */
+		RESERVE_SOC_SOURCE_UNAVAILABLE(Doc.of(Level.WARNING) //
+				.text("'Reserve SoC Channel' is configured but currently unresolvable/undefined - falling back to the fixed 'Reserve SoC' value")); //
 
 		private final Doc doc;
 
@@ -54,5 +62,24 @@ public interface MeterVirtualGate extends ElectricityMeter, OpenemsComponent, Mo
 	 */
 	public default Value<Boolean> getGateClosed() {
 		return this.getGateClosedChannel().value();
+	}
+
+	/**
+	 * Gets the Channel for {@link ChannelId#RESERVE_SOC_SOURCE_UNAVAILABLE}.
+	 *
+	 * @return the Channel
+	 */
+	public default StateChannel getReserveSocSourceUnavailableChannel() {
+		return this.channel(ChannelId.RESERVE_SOC_SOURCE_UNAVAILABLE);
+	}
+
+	/**
+	 * Internal method to set the 'nextValue' on
+	 * {@link ChannelId#RESERVE_SOC_SOURCE_UNAVAILABLE} Channel.
+	 *
+	 * @param value the next value
+	 */
+	public default void _setReserveSocSourceUnavailable(boolean value) {
+		this.getReserveSocSourceUnavailableChannel().setNextValue(value);
 	}
 }
