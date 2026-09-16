@@ -45,7 +45,7 @@ public class IoShellyProEm50ImplTest {
 	@Test
 	public void test() throws Exception {
 		final var sut = new IoShellyProEm50Impl();
-		final var httpTestBundle = new DummyBridgeHttpBundle();
+		final var httpTestBundle = DummyBridgeHttpBundle.of();
 		final var dummyCycleSubscriber = new DummyCycleSubscriber();
 		new ComponentTest(sut) //
 				.addReference("httpBridgeFactory", httpTestBundle.factory()) //
@@ -112,7 +112,7 @@ public class IoShellyProEm50ImplTest {
 	@Test
 	public void testChannel1() throws Exception {
 		final var sut = new IoShellyProEm50Impl();
-		final var httpTestBundle = new DummyBridgeHttpBundle();
+		final var httpTestBundle = DummyBridgeHttpBundle.of();
 		final var dummyCycleSubscriber = new DummyCycleSubscriber();
 		new ComponentTest(sut) //
 				.addReference("httpBridgeFactory", httpTestBundle.factory()) //
@@ -163,7 +163,7 @@ public class IoShellyProEm50ImplTest {
 	@Test
 	public void testInvert() throws Exception {
 		final var sut = new IoShellyProEm50Impl();
-		final var httpTestBundle = new DummyBridgeHttpBundle();
+		final var httpTestBundle = DummyBridgeHttpBundle.of();
 		final var dummyCycleSubscriber = new DummyCycleSubscriber();
 		new ComponentTest(sut) //
 				.addReference("httpBridgeFactory", httpTestBundle.factory()) //
@@ -199,7 +199,7 @@ public class IoShellyProEm50ImplTest {
 	@Test
 	public void testMeterTypeGrid() throws Exception {
 		final var sut = new IoShellyProEm50Impl();
-		final var httpTestBundle = new DummyBridgeHttpBundle();
+		final var httpTestBundle = DummyBridgeHttpBundle.of();
 		final var dummyCycleSubscriber = new DummyCycleSubscriber();
 		new ComponentTest(sut) //
 				.addReference("httpBridgeFactory", httpTestBundle.factory()) //
@@ -243,7 +243,7 @@ public class IoShellyProEm50ImplTest {
 	@Test
 	public void testMeterTypeProduction() throws Exception {
 		final var sut = new IoShellyProEm50Impl();
-		final var httpTestBundle = new DummyBridgeHttpBundle();
+		final var httpTestBundle = DummyBridgeHttpBundle.of();
 		final var dummyCycleSubscriber = new DummyCycleSubscriber();
 		new ComponentTest(sut) //
 				.addReference("httpBridgeFactory", httpTestBundle.factory()) //
