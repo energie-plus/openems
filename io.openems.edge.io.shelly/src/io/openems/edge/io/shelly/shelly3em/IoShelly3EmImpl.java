@@ -162,20 +162,20 @@ public class IoShelly3EmImpl extends AbstractOpenemsComponent
 				activePower = round(getAsFloat(response, "total_power"));
 
 				var emeters = getAsJsonArray(response, "emeters");
-				// Shelly reports 'total'/'total_returned' per phase in Watt-minutes - the device's
-				// own cumulative meter registers, not integrated on-edge from power. Summed across
-				// phases and converted to Wh, so a lost poll or an OpenEMS restart never causes the
-				// accumulated energy to drift or jump.
-				var totalWmin = 0f;
-				var totalReturnedWmin = 0f;
+				// Shelly reports 'total'/'total_returned' per phase in Wh - the device's own
+				// cumulative meter registers, not integrated on-edge from power. Summed across
+				// phases, so a lost poll or an OpenEMS restart never causes the accumulated
+				// energy to drift or jump.
+				var totalWh = 0f;
+				var totalReturnedWh = 0f;
 				for (int i = 0; i < emeters.size(); i++) {
 					var emeter = getAsJsonObject(emeters.get(i));
 					var power = invert.apply(round(getAsFloat(emeter, "power")));
 					var voltage = round(getAsFloat(emeter, "voltage") * 1000);
 					var current = invert.apply(round(getAsFloat(emeter, "current") * 1000));
 					var isValid = getAsBoolean(emeter, "is_valid");
-					totalWmin += getAsFloat(emeter, "total");
-					totalReturnedWmin += getAsFloat(emeter, "total_returned");
+					totalWh += getAsFloat(emeter, "total");
+					totalReturnedWh += getAsFloat(emeter, "total_returned");
 
 					switch (i + 1 /* phase */) {
 					case 1 -> {
@@ -203,8 +203,11 @@ public class IoShelly3EmImpl extends AbstractOpenemsComponent
 				// while it is negative - same convention ElectricityMeter uses for ActivePower: >= 0 is
 				// Production, < 0 is Consumption. So without inversion, "total" maps to Production and
 				// "total_returned" to Consumption; inversion flips both, same as it flips ActivePower.
-				var consumptionWh = Math.round(totalWmin / 60f);
-				var productionWh = Math.round(totalReturnedWmin / 60f);
+				// Despite the field names, this device reports both already in Wh, not Watt-minutes -
+				// confirmed by comparing the register delta against real power draw over a fixed
+				// interval, so no /60 conversion here.
+				var consumptionWh = Math.round(totalWh);
+				var productionWh = Math.round(totalReturnedWh);
 				if (this.invert) {
 					consumptionEnergy = (long) consumptionWh;
 					productionEnergy = (long) productionWh;
