@@ -11,8 +11,10 @@ import org.osgi.service.metatype.annotations.Designate;
 
 import io.openems.common.channel.AccessMode;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
+import io.openems.common.types.ChannelAddress;
 import io.openems.common.types.MeterType;
 import io.openems.edge.common.component.AbstractOpenemsComponent;
+import io.openems.edge.common.component.ComponentManager;
 import io.openems.edge.common.component.OpenemsComponent;
 import io.openems.edge.common.modbusslave.ModbusSlave;
 import io.openems.edge.common.modbusslave.ModbusSlaveTable;
@@ -32,6 +34,9 @@ public class MeterVirtualGateImpl extends AbstractOpenemsComponent
 
 	@Reference
 	protected ConfigurationAdmin cm;
+
+	@Reference
+	private ComponentManager componentManager;
 
 	@Reference
 	private ElectricityMeter meter;
@@ -61,7 +66,13 @@ public class MeterVirtualGateImpl extends AbstractOpenemsComponent
 			return;
 		}
 
-		this.channelManager.activate(this.meter, this.ess, config.reserveSoc());
+		ChannelAddress reserveSocChannelAddress = null;
+		if (!config.reserveSocChannelAddress().isBlank()) {
+			reserveSocChannelAddress = ChannelAddress.fromString(config.reserveSocChannelAddress());
+		}
+
+		this.channelManager.activate(this.meter, this.ess, config.reserveSoc(), reserveSocChannelAddress,
+				config.hysteresis(), this.componentManager);
 	}
 
 	@Override

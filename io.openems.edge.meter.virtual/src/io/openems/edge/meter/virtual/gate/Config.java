@@ -34,8 +34,14 @@ import io.openems.common.types.MeterType;
 	@AttributeDefinition(name = "Ess-ID", description = "Component-ID of the Energy Storage System providing the State-of-Charge")
 	String ess_id();
 
-	@AttributeDefinition(name = "Reserve SoC [%]", description = "At or below this State-of-Charge the gated meter reports zero instead of its real value")
+	@AttributeDefinition(name = "Reserve SoC [%]", description = "Fixed reserve threshold. Used when 'Reserve SoC Channel' is empty, or as fallback when that channel is currently undefined/unresolvable")
 	int reserveSoc() default 30;
+
+	@AttributeDefinition(name = "Reserve SoC Channel", description = "Optional Channel-Address (Component-ID/Channel-ID), e.g. 'ctrlSocReserveEstimator0/CalculatedMinSoc', providing a dynamic reserve threshold in %. Overrides 'Reserve SoC [%]' when defined; falls back to it when empty or undefined")
+	String reserveSocChannelAddress() default "";
+
+	@AttributeDefinition(name = "Hysteresis [%]", description = "Once the gate closes, SoC must rise this many percentage points above the effective reserve threshold before it reopens - avoids rapid open/close flickering when SoC or a dynamic threshold hover near each other")
+	int hysteresis() default 5;
 
 	@AttributeDefinition(name = "Add to Sum?", description = "Should the data of this meter be added to the Sum?")
 	boolean addToSum() default false;

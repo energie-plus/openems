@@ -14,6 +14,8 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private String meterId;
 		private String essId;
 		private int reserveSoc;
+		private String reserveSocChannelAddress = "";
+		private int hysteresis;
 
 		private Builder() {
 		}
@@ -45,6 +47,16 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 
 		public Builder setReserveSoc(int reserveSoc) {
 			this.reserveSoc = reserveSoc;
+			return this;
+		}
+
+		public Builder setReserveSocChannelAddress(String reserveSocChannelAddress) {
+			this.reserveSocChannelAddress = reserveSocChannelAddress;
+			return this;
+		}
+
+		public Builder setHysteresis(int hysteresis) {
+			this.hysteresis = hysteresis;
 			return this;
 		}
 
@@ -92,6 +104,16 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public int reserveSoc() {
 		return this.builder.reserveSoc;
+	}
+
+	@Override
+	public String reserveSocChannelAddress() {
+		return this.builder.reserveSocChannelAddress;
+	}
+
+	@Override
+	public int hysteresis() {
+		return this.builder.hysteresis;
 	}
 
 	@Override
