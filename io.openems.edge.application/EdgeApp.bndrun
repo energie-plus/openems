@@ -95,6 +95,7 @@
 	bnd.identity;id='io.openems.edge.controller.ess.reactivepowervoltagecharacteristic',\
 	bnd.identity;id='io.openems.edge.controller.ess.ripplecontrolreceiver',\
 	bnd.identity;id='io.openems.edge.controller.ess.selltogridlimit',\
+	bnd.identity;id='io.openems.edge.controller.ess.socreserveestimator',\
 	bnd.identity;id='io.openems.edge.controller.ess.sohcycle',\
 	bnd.identity;id='io.openems.edge.controller.ess.standby',\
 	bnd.identity;id='io.openems.edge.controller.ess.timeofusetariff',\
@@ -302,6 +303,7 @@
 	io.openems.edge.controller.ess.reactivepowervoltagecharacteristic;version=snapshot,\
 	io.openems.edge.controller.ess.ripplecontrolreceiver;version=snapshot,\
 	io.openems.edge.controller.ess.selltogridlimit;version=snapshot,\
+	io.openems.edge.controller.ess.socreserveestimator;version=snapshot,\
 	io.openems.edge.controller.ess.sohcycle;version=snapshot,\
 	io.openems.edge.controller.ess.standby;version=snapshot,\
 	io.openems.edge.controller.ess.timeofusetariff;version=snapshot,\
