@@ -180,6 +180,7 @@
 	bnd.identity;id='io.openems.edge.meter.hager',\
 	bnd.identity;id='io.openems.edge.meter.janitza',\
 	bnd.identity;id='io.openems.edge.meter.kdk',\
+	bnd.identity;id='io.openems.edge.meter.mqtt.shelly',\
 	bnd.identity;id='io.openems.edge.meter.opendtu',\
 	bnd.identity;id='io.openems.edge.meter.phoenixcontact',\
 	bnd.identity;id='io.openems.edge.meter.plexlog',\
@@ -506,4 +507,6 @@
 	org.owasp.encoder;version='[1.4.0,1.4.1)',\
 	reactive-streams;version='[1.0.4,1.0.5)',\
 	rrd4j;version='[3.10.0,3.10.1)',\
-	stax2-api;version='[4.3.0,4.3.1)'
+	stax2-api;version='[4.3.0,4.3.1)',\
+	io.openems.edge.meter.mqtt.api;version=snapshot,\
+	io.openems.edge.meter.mqtt.shelly;version=snapshot
