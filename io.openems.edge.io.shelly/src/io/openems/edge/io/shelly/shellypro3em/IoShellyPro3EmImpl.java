@@ -32,6 +32,7 @@ import io.openems.edge.common.mdns.MDnsDiscovery;
 import io.openems.edge.io.shelly.common.HttpBridgeShellyService;
 import io.openems.edge.io.shelly.common.component.ShellyEnergyMeter;
 import io.openems.edge.io.shelly.common.component.ShellyEnergyMeterHandler;
+import io.openems.edge.io.shelly.common.component.ShellyScriptEnergyHandler;
 import io.openems.edge.io.shelly.common.gen2.IoGen2ShellyBase;
 import io.openems.edge.io.shelly.common.gen2.IoGen2ShellyBaseImpl;
 import io.openems.edge.meter.api.ElectricityMeter;
@@ -52,7 +53,10 @@ public class IoShellyPro3EmImpl extends IoGen2ShellyBaseImpl implements IoShelly
 	private final Logger log = LoggerFactory.getLogger(IoShellyPro3EmImpl.class);
 
 	private MeterType meterType = null;
+	private EnergySource energySource = EnergySource.POWER_INTEGRATION;
+	private int scriptId = 1;
 	private ShellyEnergyMeterHandler handler;
+	private ShellyScriptEnergyHandler scriptEnergyHandler;
 
 	@Reference(policy = DYNAMIC, policyOption = GREEDY, cardinality = OPTIONAL)
 	private volatile Timedata timedata;
@@ -85,11 +89,18 @@ public class IoShellyPro3EmImpl extends IoGen2ShellyBaseImpl implements IoShelly
 	@Activate
 	protected void activate(ComponentContext context, Config config) {
 		this.meterType = config.type();
+		// Must be set before super.activate(), which subscribes the data calls
+		this.energySource = config.energySource();
+		this.scriptId = config.scriptId();
 
 		super.activate(context, config.id(), config.alias(), config.enabled(), config.ip(), config.mdnsName(),
 				config.debugMode(), config.validateDevice());
 
-		this.handler = new ShellyEnergyMeterHandler(this, config.invert());
+		final var integrateEnergyFromPower = this.energySource == EnergySource.POWER_INTEGRATION;
+		this.handler = new ShellyEnergyMeterHandler(this, config.invert(), integrateEnergyFromPower);
+		if (!integrateEnergyFromPower) {
+			this.scriptEnergyHandler = new ShellyScriptEnergyHandler(this, config.invert());
+		}
 	}
 
 	@Deactivate
@@ -113,6 +124,33 @@ public class IoShellyPro3EmImpl extends IoGen2ShellyBaseImpl implements IoShelly
 	@Override
 	protected void subscribeDataCalls() {
 		this.cycleService.subscribeJsonEveryCycle(this.baseUrl + "/rpc/EM.GetStatus?id=0", this::processHttpResult);
+
+		if (this.energySource == EnergySource.SCRIPT_ENERGY_ENDPOINT) {
+			this.cycleService.subscribeJsonEveryCycle(this.baseUrl + "/script/" + this.scriptId + "/energy",
+					this::processScriptEnergyResult);
+		}
+	}
+
+	private void processScriptEnergyResult(HttpResponse<JsonElement> result, HttpError error) {
+		final var handler = this.scriptEnergyHandler;
+		if (handler == null) {
+			return;
+		}
+
+		if (error != null) {
+			this.logDebug(this.log, "Failed to fetch energy from script: " + error.getMessage());
+			setValue(this, IoShellyPro3Em.ChannelId.ENERGY_SCRIPT_UNAVAILABLE, true);
+			return;
+		}
+
+		try {
+			final var applied = handler.process(JsonUtils.getAsJsonObject(result.data()));
+			setValue(this, IoShellyPro3Em.ChannelId.ENERGY_SCRIPT_UNAVAILABLE, !applied);
+
+		} catch (Exception e) {
+			this.logDebug(this.log, "Error while parsing energy script response: " + e.getMessage());
+			setValue(this, IoShellyPro3Em.ChannelId.ENERGY_SCRIPT_UNAVAILABLE, true);
+		}
 	}
 
 	private void processHttpResult(HttpResponse<JsonElement> result, HttpError error) {

@@ -15,8 +15,20 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 		private boolean invert;
 		private boolean validateDevice = false;
 		private DebugMode debugMode = DebugMode.OFF;
+		private EnergySource energySource = EnergySource.POWER_INTEGRATION;
+		private int scriptId = 1;
 
 		private Builder() {
+		}
+
+		public Builder setEnergySource(EnergySource energySource) {
+			this.energySource = energySource;
+			return this;
+		}
+
+		public Builder setScriptId(int scriptId) {
+			this.scriptId = scriptId;
+			return this;
 		}
 
 		public Builder setId(String id) {
@@ -103,5 +115,15 @@ public class MyConfig extends AbstractComponentConfig implements Config {
 	@Override
 	public boolean validateDevice() {
 		return this.builder.validateDevice;
+	}
+
+	@Override
+	public EnergySource energySource() {
+		return this.builder.energySource;
+	}
+
+	@Override
+	public int scriptId() {
+		return this.builder.scriptId;
 	}
 }

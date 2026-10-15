@@ -32,13 +32,32 @@ public class ShellyEnergyMeterHandler {
 	private final CalculateEnergyFromPower calculateConsumptionEnergy;
 
 	public ShellyEnergyMeterHandler(ShellyEnergyMeter component, boolean shouldInvert) {
+		this(component, shouldInvert, true);
+	}
+
+	/**
+	 * Creates a handler.
+	 *
+	 * @param component                the {@link ShellyEnergyMeter}
+	 * @param shouldInvert             invert power and current values
+	 * @param integrateEnergyFromPower true to integrate the energy Channels from
+	 *                                 the active power; false if another source
+	 *                                 sets them
+	 */
+	public ShellyEnergyMeterHandler(ShellyEnergyMeter component, boolean shouldInvert,
+			boolean integrateEnergyFromPower) {
 		this.component = component;
 		this.shouldInvert = shouldInvert;
 
-		this.calculateProductionEnergy = new CalculateEnergyFromPower(this.component,
-				ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY);
-		this.calculateConsumptionEnergy = new CalculateEnergyFromPower(this.component,
-				ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY);
+		if (integrateEnergyFromPower) {
+			this.calculateProductionEnergy = new CalculateEnergyFromPower(this.component,
+					ElectricityMeter.ChannelId.ACTIVE_PRODUCTION_ENERGY);
+			this.calculateConsumptionEnergy = new CalculateEnergyFromPower(this.component,
+					ElectricityMeter.ChannelId.ACTIVE_CONSUMPTION_ENERGY);
+		} else {
+			this.calculateProductionEnergy = null;
+			this.calculateConsumptionEnergy = null;
+		}
 
 		ElectricityMeter.calculateSumCurrentFromPhases(this.component);
 		ElectricityMeter.calculateAverageVoltageFromPhases(this.component);
@@ -166,6 +185,11 @@ public class ShellyEnergyMeterHandler {
 	 * Calculate the Energy values from ActivePower.
 	 */
 	private void calculateEnergy() {
+		if (this.calculateProductionEnergy == null || this.calculateConsumptionEnergy == null) {
+			// Energy is provided by another source
+			return;
+		}
+
 		// Calculate Energy
 		final var activePower = this.component.getActivePower().get();
 		if (activePower == null) {

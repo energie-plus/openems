@@ -31,6 +31,12 @@ import io.openems.common.types.MeterType;
 	@AttributeDefinition(name = "Invert Power", description = "Inverts all Power values, inverts current values, swaps production and consumptioon energy, i.e. Power is multiplied with -1.")
 	boolean invert() default false;
 
+	@AttributeDefinition(name = "Energy source", description = "POWER_INTEGRATION: energy is integrated from the measured power on the Edge. SCRIPT_ENERGY_ENDPOINT: energy counters are read from a net-metering script running on the Shelly.")
+	EnergySource energySource() default EnergySource.POWER_INTEGRATION;
+
+	@AttributeDefinition(name = "Script ID", description = "ID of the Shelly script that serves '/script/<id>/energy'. Only used with SCRIPT_ENERGY_ENDPOINT.")
+	int scriptId() default 1;
+
 	@AttributeDefinition(name = "Device type validation", description = "If enabled and type is wrong no values will be read from the device.")
 	boolean validateDevice() default false;
 
