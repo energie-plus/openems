@@ -10,9 +10,9 @@ import org.junit.jupiter.api.Test;
 
 import io.openems.common.utils.FunctionUtils;
 import io.openems.edge.common.test.AbstractComponentTest.TestCase;
-import io.openems.edge.controller.evse.single.Types.Hysteresis;
-import io.openems.edge.controller.evse.single.statemachine.StateMachine.State;
 import io.openems.edge.evse.api.chargepoint.Profile;
+import io.openems.edge.evse.api.chargepoint.Profile.ChargePointAbilities;
+import io.openems.edge.evse.api.chargepoint.Profile.ChargePointActions;
 import io.openems.edge.evse.api.common.ApplySetPoint;
 
 class ControllerEvseSingleImplTest {
@@ -55,9 +55,30 @@ class ControllerEvseSingleImplTest {
 		assertEquals(0, params.sessionEnergy());
 		assertEquals(10000, params.sessionEnergyLimit().intValue());
 		assertEquals(0, params.history().streamAll().count());
-		assertEquals(Hysteresis.INACTIVE, params.hysteresis());
 		assertEquals(PhaseSwitching.DISABLE, params.phaseSwitching());
-		assertFalse(params.appearsToBeFullyCharged());
+		assertFalse(params.history().getAppearsToBeFullyCharged());
+	}
+
+	@Test
+	void testHistoryStoresAppliedSetPointInWatt() {
+		var sut = generateSingleSut(c -> c //
+				.setLogVerbosity(LogVerbosity.DEBUG_LOG));
+		sut.chargePoint().withActivePower(321);
+
+		var abilities = ChargePointAbilities.create() //
+				.setApplySetPoint(new ApplySetPoint.Ability.MilliAmpere(THREE_PHASE, 6000, 16000)) //
+				.setIsReadyForCharging(true) //
+				.build();
+		var actions = ChargePointActions.from(abilities) //
+				.setApplySetPointInMilliAmpere(6000) //
+				.setIdealSetPointInWatt(7000) //
+				.build();
+
+		sut.ctrlSingle().addHistoryEntry(actions);
+
+		var lastEntry = sut.ctrlSingle().getParams().history().getLastEntry();
+		assertEquals(4140, lastEntry.getValue().setPoint());
+		assertEquals(Integer.valueOf(321), lastEntry.getValue().activePower());
 	}
 
 	@Test
@@ -77,7 +98,7 @@ class ControllerEvseSingleImplTest {
 
 		assertEquals(Mode.FORCE.getValue(),
 				sut.ctrlSingle().channel(ControllerEvseSingle.ChannelId.ACTUAL_MODE).getNextValue().get());
-		assertEquals(State.EV_NOT_CONNECTED.getValue(),
+		assertEquals(EvseSingleState.EV_NOT_CONNECTED.getValue(),
 				sut.ctrlSingle().channel(ControllerEvseSingle.ChannelId.STATE_MACHINE).getNextValue().get());
 
 		assertNull(sut.chargePoint().getLastChargePointActions());

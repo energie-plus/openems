@@ -412,7 +412,7 @@ public final class ComponentProps {
 	/**
 	 * Creates a {@link AppDef} for a selection to show if the element is measured
 	 * internal or external.
-	 * 
+	 *
 	 * @param isElementMeasured the {@link Nameable} IS_ELEMENT_MEASURED
 	 * @param <APP>             the type of the app, which must implement *
 	 *                          OpenemsApp, ComponentUtilSupplier and *
@@ -438,7 +438,7 @@ public final class ComponentProps {
 	/**
 	 * Creates a {@link AppDef} for a selection of all valid consumption meters if
 	 * the element is extern measured.
-	 * 
+	 *
 	 * @param isElementMeasured the {@link Nameable} IS_ELEMENT_MEASURED
 	 * @param howMeasured       the {@link Nameable} HOW_MEASURED
 	 * @param <APP>             the type of the app, which must implement * *

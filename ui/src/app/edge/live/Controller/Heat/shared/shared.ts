@@ -2,11 +2,11 @@ import { FormControl, FormGroup } from "@angular/forms";
 import { TranslateService } from "@ngx-translate/core";
 import { ChartDataset } from "chart.js";
 import { ButtonLabel } from "src/app/shared/components/modal/modal-button/modal-button";
-import { NavigationTree } from "src/app/shared/components/navigation/shared";
+import { NavigationConstants, NavigationTree } from "src/app/shared/components/navigation/shared";
 import { Converter } from "src/app/shared/components/shared/converter";
 import { Name } from "src/app/shared/components/shared/name";
 import { OeFormlyView } from "src/app/shared/components/shared/oe-formly-component";
-import { RouteService } from "src/app/shared/service/route.service";
+import { RouteService } from "src/app/shared/service/route/route.service";
 import { ChannelAddress, Edge, EdgeConfig, Service } from "src/app/shared/shared";
 import { AssertionUtils } from "src/app/shared/utils/assertions/assertions.utils";
 import { environment } from "../../../../../../environments";
@@ -24,8 +24,7 @@ export namespace SharedControllerHeat {
 
         return {
             title: Name.METER_ALIAS_OR_ID(component),
-            helpKey: "REDIRECT.CONTROLLER_IO_HEATING_ELEMENT",
-            useDefaultPrefix: false,
+            helpKey: getHelpKey(component),
             lines: getLegacyViewLines(translate, component),
             component,
             edge,
@@ -44,10 +43,10 @@ export namespace SharedControllerHeat {
         const isMyPv = component.factoryId === "Heat.MyPv.AcThor9s" || component.factoryId === "Heat.MyPv";
 
         return [
-            ...getFormlySharedLines(translate, component),
-            ...(isMyPv ? getMyPVInfoLine(translate) : []),
             ...(isAskoma ? getAskomaIcon() : []),
             ...(isMyPv ? getMyPvIcon() : []),
+            ...getFormlySharedLines(translate, component),
+            ...(isMyPv ? getMyPVInfoLine(translate) : []),
         ];
     };
 
@@ -187,44 +186,16 @@ export namespace SharedControllerHeat {
     export function getNavigationTree(
         translate: TranslateService,
         component: EdgeConfig.Component,
-        isAskoma: boolean,
     ): ConstructorParameters<typeof NavigationTree> {
         const isWritable = component.properties?.readOnly !== true;
         const children = [];
 
-        if (isWritable && isAskoma) {
-            children.push(
-                new NavigationTree(
-                    "forecast",
-                    { baseString: "forecast" },
-                    { name: "stats-chart-outline", color: "success" },
-                    translate.instant("HEAT.FORECAST.FORECAST"),
-                    "label",
-                    [],
-                    null,
-                ),
-            );
-        }
-
-        children.push(
-            new NavigationTree(
-                "history",
-                { baseString: "history" },
-                {
-                    name: "stats-chart-outline",
-                    color: "warning",
-                },
-                translate.instant("GENERAL.HISTORY"),
-                "label",
-                [],
-                null,
-            ),
-        );
+        children.push(NavigationConstants.CommonNodes.HISTORY(translate, component.id));
 
         if (isWritable) {
             children.push(
                 new NavigationTree(
-                    "schedule",
+                    component.id + "-schedule",
                     { baseString: "schedule" },
                     {
                         name: "calendar-outline",
@@ -234,7 +205,7 @@ export namespace SharedControllerHeat {
                     "label",
                     [
                         new NavigationTree(
-                            "edit-task",
+                            component.id + "-edit-task",
                             { baseString: "edit-task" },
                             { name: "create-outline" },
                             translate.instant("JS_SCHEDULE.EDIT_EVENT"),
@@ -244,7 +215,7 @@ export namespace SharedControllerHeat {
                             { showOrder: "HIDE" },
                         ),
                         new NavigationTree(
-                            "add-task",
+                            component.id + "-add-task",
                             { baseString: "add-task" },
                             { name: "add-outline" },
                             translate.instant("JS_SCHEDULE.ADD_EVENT"),
@@ -257,7 +228,7 @@ export namespace SharedControllerHeat {
                     null,
                 ),
                 new NavigationTree(
-                    "settings",
+                    component.id + "-settings",
                     { baseString: "settings" },
                     { name: "cog-outline" },
                     translate.instant("MENU.SETTINGS"),
@@ -366,6 +337,22 @@ export namespace SharedControllerHeat {
         };
 
         return scheduleChartData;
+    }
+
+    export function getHelpKey(component: EdgeConfig.Component | null): string | null {
+        if (component == null) {
+            return null;
+        }
+        const isAskoma = component.factoryId === "Heat.Askoma";
+        const isMyPv = component.factoryId === "Heat.MyPv.AcThor9s" || component.factoryId === "Heat.MyPv";
+
+        if (isAskoma) {
+            return "REDIRECT.CONTROLLER_HEAT_ASKOMA";
+        }
+        if (isMyPv) {
+            return "REDIRECT.CONTROLLER_HEAT_MYPV";
+        }
+        return "REDIRECT.CONTROLLER_IO_HEATING_ELEMENT";
     }
 }
 

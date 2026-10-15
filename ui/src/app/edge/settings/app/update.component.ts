@@ -6,10 +6,10 @@ import { FormlyFieldConfig, FormlyModule } from "@ngx-formly/core";
 import { TranslateService } from "@ngx-translate/core";
 import { NgxSpinnerComponent } from "ngx-spinner";
 import { CommonUiModule } from "src/app/shared/common-ui.module";
-import { NavigationBackButtonComponent } from "src/app/shared/components/navigation/back-button/back-button";
+import { NavigationBackButtonComponent } from "src/app/shared/components/navigation/back-button/navigation-back-button";
 import { ComponentJsonApiRequest } from "src/app/shared/jsonrpc/request/componentJsonApiRequest";
 import { PipeComponentsModule } from "src/app/shared/pipe/pipe.module";
-import { RouteService } from "src/app/shared/service/route.service";
+import { RouteService } from "src/app/shared/service/route/route.service";
 import { Edge, EdgePermission, Service, Utils, Websocket } from "../../../shared/shared";
 import { extractErrorMessage } from "../../../shared/utils/error/error.utils";
 import { InstallAppComponent } from "./install.component";
@@ -379,8 +379,15 @@ export class UpdateAppComponent implements OnInit {
                     state: { appInstanceChange: true },
                     relativeTo: this.route,
                 };
+                const appId = this.routeService.getQueryParam<string>("appId");
 
-                this.router.navigate(["../"], navigationExtras);
+                this.router.navigate(["../"], {
+                    ...navigationExtras,
+                    queryParams: {
+                        name: this.appName,
+                        appId: appId,
+                    },
+                });
             })
             .catch(
                 InstallAppComponent.errorToast(this.service, (error) =>

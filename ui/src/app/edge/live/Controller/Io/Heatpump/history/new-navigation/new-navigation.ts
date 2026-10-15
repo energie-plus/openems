@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy } from "@angular/core";
+import { ChangeDetectionStrategy, Component } from "@angular/core";
 import { ReactiveFormsModule } from "@angular/forms";
 import { ActivatedRoute } from "@angular/router";
 import { ModalController } from "@ionic/angular";
@@ -15,8 +15,13 @@ import { Service } from "src/app/shared/shared";
 import { Language } from "src/app/shared/type/language";
 import { SharedControllerIoHeatpump } from "../../shared/shared";
 import { ChartComponent } from "../chart/chart";
+import cz from "../shared/i18n/cz.json";
 import de from "../shared/i18n/de.json";
 import en from "../shared/i18n/en.json";
+import es from "../shared/i18n/es.json";
+import fr from "../shared/i18n/fr.json";
+import ja from "../shared/i18n/ja.json";
+import nl from "../shared/i18n/nl.json";
 
 @Component({
     selector: "controller-io-heatpump-overview",
@@ -42,14 +47,16 @@ export class ControllerIoHeatpumpHistoryComponent extends AbstractHistoryChartOv
         public override service: Service,
         protected override route: ActivatedRoute,
         public override modalCtrl: ModalController,
-        private translate: TranslateService,
+        private readonly translate: TranslateService,
     ) {
         super(service, route, modalCtrl);
-        Language.normalizeAdditionalTranslationFiles({ de: de, en: en }).then((translations) => {
-            for (const { lang, translation, shouldMerge } of translations) {
-                translate.setTranslation(lang, translation, shouldMerge);
-            }
-        });
+        Language.normalizeAdditionalTranslationFiles({ cs: cz, de: de, en: en, es: es, fr: fr, ja: ja, nl: nl }).then(
+            (translations) => {
+                for (const { lang, translation, shouldMerge } of translations) {
+                    translate.setTranslation(lang, translation, shouldMerge);
+                }
+            },
+        );
     }
 
     protected setChartConfig(event: ChartTypes.ChartConfig) {

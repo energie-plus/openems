@@ -1,5 +1,5 @@
 import { CommonModule } from "@angular/common";
-import { Component, inject, ChangeDetectionStrategy } from "@angular/core";
+import { ChangeDetectionStrategy, Component } from "@angular/core";
 import { FormGroup, ReactiveFormsModule } from "@angular/forms";
 import { IonicModule } from "@ionic/angular";
 import { FormlyModule } from "@ngx-formly/core";
@@ -7,7 +7,6 @@ import { TranslateModule, TranslateService } from "@ngx-translate/core";
 import { LiveDataService } from "src/app/edge/live/livedataservice";
 import { DataService } from "src/app/shared/components/shared/dataservice";
 import { AbstractFormlyComponent, OeFormlyView } from "src/app/shared/components/shared/oe-formly-component";
-import { RouteService } from "src/app/shared/service/route.service";
 import { ChannelAddress, CurrentData, Edge, EdgeConfig } from "src/app/shared/shared";
 import { AssertionUtils } from "src/app/shared/utils/assertions/assertions.utils";
 import { SharedControllerTimeslotPeakshaving } from "../shared/shared";
@@ -23,7 +22,6 @@ export class ControllerPeakShavingSymmetricTimeSlotSettingsComponent extends Abs
     protected override formlyWrapper: "formly-field-modal" | "formly-field-navigation" = "formly-field-navigation";
 
     private component: EdgeConfig.Component | null = null;
-    private readonly routeService: RouteService = inject(RouteService);
 
     public static getFormlyGeneralView(
         translate: TranslateService,
@@ -58,98 +56,98 @@ export class ControllerPeakShavingSymmetricTimeSlotSettingsComponent extends Abs
         this.component ??= this.getComponent();
 
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "peakShavingPower",
             currentData,
             new ChannelAddress(this.component.id, "_PropertyPeakShavingPower"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "rechargePower",
             currentData,
             new ChannelAddress(this.component.id, "_PropertyRechargePower"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "slowChargeStartTime",
             currentData,
             new ChannelAddress(this.component.id, "_PropertySlowChargeStartTime"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "slowChargePower",
             currentData,
             new ChannelAddress(this.component.id, "_PropertySlowChargePower"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "endTime",
             currentData,
             new ChannelAddress(this.component.id, "_PropertyEndTime"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "startTime",
             currentData,
             new ChannelAddress(this.component.id, "_PropertyStartTime"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "endDate",
             currentData,
             new ChannelAddress(this.component.id, "_PropertyEndDate"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "startDate",
             currentData,
             new ChannelAddress(this.component.id, "_PropertyStartDate"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "hysteresisSoc",
             currentData,
             new ChannelAddress(this.component.id, "_PropertyHysteresisSoc"),
         );
 
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "monday",
             currentData,
             new ChannelAddress(this.component.id, "_PropertyMonday"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "tuesday",
             currentData,
             new ChannelAddress(this.component.id, "_PropertyTuesday"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "wednesday",
             currentData,
             new ChannelAddress(this.component.id, "_PropertyWednesday"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "thursday",
             currentData,
             new ChannelAddress(this.component.id, "_PropertyThursday"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "friday",
             currentData,
             new ChannelAddress(this.component.id, "_PropertyFriday"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "saturday",
             currentData,
             new ChannelAddress(this.component.id, "_PropertySaturday"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "sunday",
             currentData,
             new ChannelAddress(this.component.id, "_PropertySunday"),
@@ -163,16 +161,5 @@ export class ControllerPeakShavingSymmetricTimeSlotSettingsComponent extends Abs
     protected override getChannelAddresses(): Promise<ChannelAddress[]> {
         this.component ??= this.getComponent();
         return SharedControllerTimeslotPeakshaving.getChannelAddresses(this.component);
-    }
-
-    private getComponent(): EdgeConfig.Component {
-        const edge = this.service.currentEdge();
-        AssertionUtils.assertIsDefined(edge);
-        const config = edge.getCurrentConfig();
-        AssertionUtils.assertIsDefined(config);
-        const component = config.getComponentSafely(this.routeService.getRouteParam("componentId"));
-        AssertionUtils.assertIsDefined(component);
-
-        return component;
     }
 }

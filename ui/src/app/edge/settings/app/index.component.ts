@@ -1,5 +1,5 @@
 // @ts-strict-ignore
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject, model, OnDestroy, OnInit, viewChild, } from "@angular/core";
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, computed, inject, model, OnDestroy, OnInit, Signal, signal, viewChild, } from "@angular/core";
 import { ActivatedRoute, NavigationEnd, NavigationExtras, Router, RouterModule } from "@angular/router";
 import { IonPopover, ModalController } from "@ionic/angular";
 import { TranslateService } from "@ngx-translate/core";
@@ -7,17 +7,23 @@ import { NgxSpinnerComponent } from "ngx-spinner";
 import { Subject } from "rxjs";
 import { filter, switchMap, takeUntil } from "rxjs/operators";
 import { ChosenFilter, Filter, FilterComponent, FilterOption } from "src/app/index/filter/filter.component";
-import { NavigationService } from "src/app/shared/components/navigation/service/navigation.service";
-import { NavigationTree } from "src/app/shared/components/navigation/shared";
 import { DomChangeDirective } from "src/app/shared/directive/oe-dom-change";
 import { ComponentJsonApiRequest } from "src/app/shared/jsonrpc/request/componentJsonApiRequest";
 import { PipeComponentsModule } from "src/app/shared/pipe/pipe.module";
+import { Language } from "src/app/shared/type/language";
 import { Role } from "src/app/shared/type/role";
 import { StringUtils } from "src/app/shared/utils/string/string.utils";
 import { Environment, environment } from "src/environments";
 import { CommonUiModule } from "../../../shared/common-ui.module";
 import { Edge, Service, Websocket } from "../../../shared/shared";
 import { ExecuteSystemUpdate } from "../system/executeSystemUpdate";
+import cz from "./i18n/cz.json";
+import de from "./i18n/de.json";
+import en from "./i18n/en.json";
+import es from "./i18n/es.json";
+import fr from "./i18n/fr.json";
+import ja from "./i18n/ja.json";
+import nl from "./i18n/nl.json";
 import { InstallAppComponent } from "./install.component";
 import { Flags } from "./jsonrpc/flag/flags";
 import { GetApps } from "./jsonrpc/getApps";
@@ -42,6 +48,7 @@ import { canEnterKey } from "./permissions";
         DomChangeDirective,
         FilterComponent,
     ],
+
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class IndexComponent implements OnInit, OnDestroy {
@@ -57,10 +64,18 @@ export class IndexComponent implements OnInit, OnDestroy {
         appCategories: [],
         shouldBeShown: () => this.key === null, // only show installed apps when the user is not currently selecting an app from a key
     };
+
     public availableApps: AppList = {
         name: "EDGE.CONFIG.APP.AVAILABLE",
         appCategories: [],
         shouldBeShown: () => true, // always show available apps
+        additionalInfo: computed<string | null>(() => {
+            const _areTranslationLoaded = this.areTranslationsLoaded();
+            if (environment.backend !== "OpenEMS Backend") {
+                return this.translate.instant("APP_CENTER.LOCAL_MONITORING");
+            }
+            return null;
+        }),
     };
     public incompatibleApps: AppList = {
         name: "EDGE.CONFIG.APP.INCOMPATIBLE",
@@ -68,7 +83,7 @@ export class IndexComponent implements OnInit, OnDestroy {
         shouldBeShown: () => this.edge.roleIsAtLeast(Role.ADMIN), // only show incompatible apps for admins
     };
 
-    public appLists: AppList[] = [this.installedApps, this.availableApps, this.incompatibleApps];
+    public appLists = signal<AppList[]>([this.installedApps, this.availableApps, this.incompatibleApps]);
     public categories: { val: GetApps.Category; isChecked: boolean }[] = [];
 
     protected readonly environment: Environment = environment;
@@ -78,7 +93,7 @@ export class IndexComponent implements OnInit, OnDestroy {
     protected selectedBundle: number | null = null;
     protected isUpdateAvailable: boolean = false;
     protected canEnterKey: boolean = false;
-    protected numberOfUnusedRegisteredKeys: number = 0;
+    protected numberOfUnusedRegisteredKeys = signal<number>(0);
     protected showPopover = model<boolean>(false);
     protected searchParams: Map<string, ChosenFilter["value"]> = new Map();
     protected hasKeyPopover = viewChild<IonPopover>("hasKeyPopover");
@@ -88,8 +103,8 @@ export class IndexComponent implements OnInit, OnDestroy {
     private stopOnDestroy: Subject<void> = new Subject<void>();
     private inputValue: string;
 
-    private readonly navigationService: NavigationService = inject(NavigationService);
     private readonly cdRef: ChangeDetectorRef = inject(ChangeDetectorRef);
+    private readonly areTranslationsLoaded = signal<boolean>(false);
 
     public constructor(
         private route: ActivatedRoute,
@@ -98,7 +113,16 @@ export class IndexComponent implements OnInit, OnDestroy {
         private translate: TranslateService,
         private router: Router,
         private modalController: ModalController,
-    ) {}
+    ) {
+        Language.normalizeAdditionalTranslationFiles({ cs: cz, de: de, en: en, es: es, fr: fr, ja: ja, nl: nl }).then(
+            (translations) => {
+                for (const { lang, translation, shouldMerge } of translations) {
+                    translate.setTranslation(lang, translation, shouldMerge);
+                }
+                this.areTranslationsLoaded.set(true);
+            },
+        );
+    }
 
     public ngOnInit() {
         this.init();
@@ -207,22 +231,28 @@ export class IndexComponent implements OnInit, OnDestroy {
             }
         });
 
-        this.appLists = [];
+        let nextAppLists: AppList[] = [];
         const selectedStatuses =
             this.searchParams.get("appStatus") ?? this.statusFilter().options.map((el) => el.option.value);
         if (Array.isArray(selectedStatuses)) {
             if (StringUtils.isInArr(AppStatusName.INSTALLABLE, selectedStatuses)) {
-                this.appLists.push(this.installedApps);
+                nextAppLists.push(this.installedApps);
             }
             if (StringUtils.isInArr(AppStatusName.COMPATIBLE, selectedStatuses)) {
-                this.appLists.push(this.availableApps);
+                nextAppLists.push(this.availableApps);
             }
             if (StringUtils.isInArr(AppStatusName.INCOMPATIBLE, selectedStatuses)) {
-                this.appLists.push(this.incompatibleApps);
+                nextAppLists.push(this.incompatibleApps);
             }
         } else {
-            this.appLists = [this.installedApps, this.availableApps, this.incompatibleApps];
+            nextAppLists.push(this.installedApps, this.availableApps, this.incompatibleApps);
         }
+
+        if (environment.backend !== "OpenEMS Backend") {
+            nextAppLists = [this.installedApps, this.availableApps];
+        }
+
+        this.appLists.set(nextAppLists);
     }
 
     protected showCategories(app: AppList): boolean {
@@ -298,18 +328,6 @@ export class IndexComponent implements OnInit, OnDestroy {
 
     protected onAppClicked(app: GetApps.App): void {
         // navigate
-        this.navigationService.setChildToCurrentNavigation(
-            new NavigationTree(
-                "single",
-                { baseString: "single", queryParams: { appId: app.appId } },
-                { name: "add-outline" },
-                "AppCenter",
-                "label",
-                [],
-                null,
-            ),
-        );
-
         if (this.key != null || this.useMasterKey) {
             this.router.navigate(["single"], {
                 queryParams: { name: app.name, appId: app.appId },
@@ -351,10 +369,11 @@ export class IndexComponent implements OnInit, OnDestroy {
         if (this.hasSeenPopover) {
             return;
         }
+
         if (!this.canEnterKey) {
             return;
         }
-        if (this.numberOfUnusedRegisteredKeys === 0) {
+        if (this.numberOfUnusedRegisteredKeys() === 0) {
             return;
         }
 
@@ -430,7 +449,7 @@ export class IndexComponent implements OnInit, OnDestroy {
         this.key = null;
         this.selectedBundle = null;
 
-        this.appLists.forEach((element) => {
+        this.appLists().forEach((element) => {
             element.appCategories = [];
         });
 
@@ -449,6 +468,10 @@ export class IndexComponent implements OnInit, OnDestroy {
 
                 this.service.metadata.pipe(takeUntil(this.stopOnDestroy)).subscribe((entry) => {
                     this.canEnterKey = canEnterKey(edge, entry.user);
+
+                    if (environment.backend !== "OpenEMS Backend") {
+                        return;
+                    }
                     this.updateHasUnusedKeysPopover();
                 });
                 edge.sendRequest(
@@ -459,8 +482,6 @@ export class IndexComponent implements OnInit, OnDestroy {
                     }),
                 )
                     .then((response) => {
-                        this.service.stopSpinner(this.spinnerId);
-
                         this.apps = (response as GetApps.Response).result.apps.map((app) => {
                             app.imageUrl = environment.links.APP_CENTER.APP_IMAGE(
                                 this.translate.getCurrentLang(),
@@ -491,6 +512,12 @@ export class IndexComponent implements OnInit, OnDestroy {
                         this.filters = [this.categoryFilter(), this.statusFilter()];
                         this.updateSelection();
 
+                        if (environment.backend !== "OpenEMS Backend") {
+                            this.appLists.set([this.installedApps, this.availableApps]);
+                            this.service.stopSpinner(this.spinnerId);
+                            return;
+                        }
+
                         edge.sendRequest(
                             this.websocket,
                             new AppCenter.Request({
@@ -499,10 +526,14 @@ export class IndexComponent implements OnInit, OnDestroy {
                         )
                             .then((response) => {
                                 const result = (response as AppCenterGetRegisteredKeys.Response).result;
-                                this.numberOfUnusedRegisteredKeys = result.keys.length;
+                                this.numberOfUnusedRegisteredKeys.set(result.keys.length);
                                 this.updateHasUnusedKeysPopover();
+                                this.service.stopSpinner(this.spinnerId);
                             })
-                            .catch(this.service.handleError);
+                            .catch((err) => {
+                                this.service.handleError(err);
+                                this.service.stopSpinner(this.spinnerId);
+                            });
                     })
                     .catch(
                         InstallAppComponent.errorToast(
@@ -529,6 +560,7 @@ interface AppList {
     name: string;
     appCategories: AppListByCategorie[];
     shouldBeShown: () => boolean;
+    additionalInfo?: Signal<string | null>;
 }
 
 interface AppListByCategorie {

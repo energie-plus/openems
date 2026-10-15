@@ -1,9 +1,8 @@
-import { Component, inject, ChangeDetectionStrategy } from "@angular/core";
+import { ChangeDetectionStrategy, Component } from "@angular/core";
 import { FormGroup } from "@angular/forms";
 import { TranslateService } from "@ngx-translate/core";
 import { DataService } from "src/app/shared/components/shared/dataservice";
 import { AbstractFormlyComponent, OeFormlyView } from "src/app/shared/components/shared/oe-formly-component";
-import { RouteService } from "src/app/shared/service/route.service";
 import { ChannelAddress, CurrentData, Edge, EdgeConfig } from "src/app/shared/shared";
 import { AssertionUtils } from "src/app/shared/utils/assertions/assertions.utils";
 import { LiveDataService } from "../../../../livedataservice";
@@ -22,8 +21,6 @@ export class ControllerEssGridOptimizedChargeSettingsComponent extends AbstractF
     public chargeStartEpochSeconds: number | null = null;
 
     protected override formlyWrapper: "formly-field-modal" | "formly-field-navigation" = "formly-field-navigation";
-
-    private routeService: RouteService = inject(RouteService);
 
     public static generateView(
         translate: TranslateService,
@@ -50,12 +47,10 @@ export class ControllerEssGridOptimizedChargeSettingsComponent extends AbstractF
     }
 
     protected override generateView(): OeFormlyView<GridOptimizedChargeViewModel> {
-        const edge = this.service.currentEdge();
-        AssertionUtils.assertIsDefined(edge);
-        const config = edge.getCurrentConfig();
-        AssertionUtils.assertIsDefined(config);
-        this.component = config.getComponentSafely(this.routeService.getRouteParam("componentId"));
-        AssertionUtils.assertIsDefined(this.component);
+        const edge = this.getEdge();
+        const config = this.getConfig();
+        this.component = this.getComponent();
+
         const isDisabledByTimeOfUse = SharedGridOptimizedCharge.isDisabledByTimeOfUse(config, this.component);
         const isEeg2025Installed = SharedGridOptimizedCharge.isEeg2025Installed(config);
         const isEeg2025Supported = SharedGridOptimizedCharge.isEeg2025Supported(config);
@@ -73,7 +68,8 @@ export class ControllerEssGridOptimizedChargeSettingsComponent extends AbstractF
     }
 
     protected override getFormGroup(): FormGroup {
-        return SharedGridOptimizedCharge.getFormGroup();
+        this.component ??= this.getComponent();
+        return SharedGridOptimizedCharge.getFormGroup(this.component);
     }
 
     protected override async getChannelAddresses(): Promise<ChannelAddress[]> {
@@ -88,31 +84,31 @@ export class ControllerEssGridOptimizedChargeSettingsComponent extends AbstractF
         this.chargeStartEpochSeconds = currentData.allComponents[component.id + "/PredictedChargeStartEpochSeconds"];
 
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "mode",
             currentData,
             new ChannelAddress(component.id, "_PropertyMode"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "delayChargeState",
             currentData,
             new ChannelAddress(component.id, "DelayChargeState"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "workMode",
             currentData,
             new ChannelAddress(component.id, "_PropertyWorkMode"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "manualTargetTime",
             currentData,
             new ChannelAddress(component.id, "_PropertyManualTargetTime"),
         );
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "delayChargeRiskLevel",
             currentData,
             new ChannelAddress(component.id, "_PropertyDelayChargeRiskLevel"),

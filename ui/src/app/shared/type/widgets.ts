@@ -1,10 +1,7 @@
 import { TranslateService } from "@ngx-translate/core";
-import { SharedConsumption } from "src/app/edge/live/common/consumption/shared/shared";
-import { SharedGrid } from "src/app/edge/live/common/grid/shared/shared";
-import { SharedProduction } from "src/app/edge/live/common/production/shared/shared";
-import { SharedStorage } from "src/app/edge/live/common/storage/shared/shared";
 import { SharedWeather } from "src/app/edge/live/common/weather/shared/shared";
 import { SharedControllerChannelThreshold } from "src/app/edge/live/Controller/Channelthreshold/shared/shared";
+import { SharedControllerChpSoc } from "src/app/edge/live/Controller/ChpSoc/shared/shared";
 import { SharedControllerEnerixControl } from "src/app/edge/live/Controller/EnerixControl/shared/shared";
 import { ControllerEvseSingleShared } from "src/app/edge/live/Controller/Evse/shared/shared";
 import { SharedControllerHeat } from "src/app/edge/live/Controller/Heat/shared/shared";
@@ -13,6 +10,7 @@ import { SharedIoChannelSingleThreshold } from "src/app/edge/live/Controller/Io/
 import { SharedControllerIoFixDigitalOutput } from "src/app/edge/live/Controller/Io/FixDigitalOutput/shared/shared";
 import { SharedControllerIoHeatingElement } from "src/app/edge/live/Controller/Io/HeatingElement/shared/shared";
 import { SharedControllerIoHeatpump } from "src/app/edge/live/Controller/Io/Heatpump/shared/shared";
+import { SharedEvcsApiCluster } from "src/app/edge/live/Multiple/evcs-api-cluster/shared/shared";
 import { SharedControllerIoHeatingRoom } from "../../edge/live/Controller/Io/HeatingRoom/shared/shared";
 import { Edge } from "../components/edge/edge";
 import { EdgeConfig } from "../components/edge/edgeconfig";
@@ -78,26 +76,6 @@ export class Widgets {
         }
     }
 
-    public static getCommonNavigationTree(
-        edge: Edge,
-        clazz: TEnumKeys<typeof WidgetClass>,
-        translate: TranslateService,
-        config: EdgeConfig,
-    ): ConstructorParameters<typeof NavigationTree> | null {
-        switch (clazz) {
-            case "Grid":
-                return SharedGrid.getNavigationTree(edge, config, translate);
-            case "Consumption":
-                return SharedConsumption.getNavigationTree(edge, config, translate);
-            case "Common_Production":
-                return SharedProduction.getNavigationTree(edge, config, translate);
-            case "Storage":
-                return SharedStorage.getNavigationTree(edge, translate, config);
-            default:
-                return null;
-        }
-    }
-
     public static getControllerNavigationTree(
         edge: Edge,
         widget: Widget,
@@ -110,6 +88,8 @@ export class Widgets {
         }
 
         switch (widget.name) {
+            case "Controller.CHP.SoC":
+                return SharedControllerChpSoc.getNavigationTree(translate, component);
             case "Controller.Clever-PV":
                 return SharedControllerEnerixControl.getNavigationTree(translate, component);
             case "Weather.OpenMeteo":
@@ -117,17 +97,17 @@ export class Widgets {
             case "Controller.IO.HeatingElement":
                 return SharedControllerIoHeatingElement.getNavigationTree(translate, component);
             case "Controller.Io.HeatPump.SgReady":
-                return SharedControllerIoHeatpump.getNavigationTree(translate, component);
+                return SharedControllerIoHeatpump.getNavigationTree(translate, component, edge);
             case "Heat.Askoma":
-                return SharedControllerHeat.getNavigationTree(translate, component, true);
             case "Heat.MyPv":
-                return SharedControllerHeat.getNavigationTree(translate, component, false);
             case "Heat.MyPv.AcThor9s":
-                return SharedControllerHeat.getNavigationTree(translate, component, false);
+                return SharedControllerHeat.getNavigationTree(translate, component);
             case "Evse.Controller.Single":
                 return ControllerEvseSingleShared.getNavigationTree(edge, translate, widget.componentId, config);
             case "Controller.ChannelThreshold":
                 return SharedControllerChannelThreshold.getNavigationTree(translate, component);
+            case "io.openems.edge.evcs.api.Evcs":
+                return SharedEvcsApiCluster.getNavigationTree(translate, component.id, config);
             default:
                 return null;
         }
@@ -176,7 +156,8 @@ export class Widgets {
                 ) {
                     continue;
                 }
-                const component = config.getComponent(componentId);
+
+                const component = config.getComponentSafelyOrDefault(componentId);
                 if (component.isEnabled) {
                     list.push({
                         name: nature,
@@ -188,7 +169,7 @@ export class Widgets {
         }
         for (const factory of Object.values(WidgetFactory).filter((v) => typeof v === "string")) {
             for (const componentId of config.getComponentIdsByFactory(factory.toString())) {
-                const component = config.getComponent(componentId);
+                const component = config.getComponentSafelyOrDefault(componentId);
                 if (factory === "Controller.Clever-PV") {
                     // Clever-PV Widget should be shown only if readOnly property is explicitely set to false
                     const readOnly = config.getPropertyFromComponent<boolean>(component, "readOnly");
@@ -196,6 +177,7 @@ export class Widgets {
                         continue;
                     }
                 }
+
                 if (component.isEnabled) {
                     list.push({
                         name: factory,
@@ -212,17 +194,17 @@ export class Widgets {
                 w1.name === "Controller.IO.ChannelSingleThreshold" &&
                 w2.name === "Controller.IO.ChannelSingleThreshold"
             ) {
-                let outputChannelAddress1: string | string[] = config.getComponentProperties(w1.componentId)[
-                    "outputChannelAddress"
-                ];
-                if (typeof outputChannelAddress1 !== "string") {
+                let outputChannelAddress1: string | string[] | undefined = config.getComponentProperties(
+                    w1.componentId,
+                )?.["outputChannelAddress"];
+                if (Array.isArray(outputChannelAddress1)) {
                     // Takes only the first output for simplicity reasons
                     outputChannelAddress1 = outputChannelAddress1[0];
                 }
-                let outputChannelAddress2: string | string[] = config.getComponentProperties(w2.componentId)[
-                    "outputChannelAddress"
-                ];
-                if (typeof outputChannelAddress2 !== "string") {
+                let outputChannelAddress2: string | string[] | undefined = config.getComponentProperties(
+                    w2.componentId,
+                )?.["outputChannelAddress"];
+                if (Array.isArray(outputChannelAddress2)) {
                     // Takes only the first output for simplicity reasons
                     outputChannelAddress2 = outputChannelAddress2[0];
                 }
@@ -240,8 +222,9 @@ export class Widgets {
         edge: Edge,
         translate: TranslateService,
         config: EdgeConfig,
+        /** Widgets to build the navigation trees from. Defaults to all Widgets derived from `config`. */
+        widgets: Widget[] = Widgets.parseWidgets(edge, config).list ?? [],
     ): ConstructorParameters<typeof NavigationTree>[] {
-        const widgets = Widgets.parseWidgets(edge, config).list ?? [];
         const navigationTrees: ConstructorParameters<typeof NavigationTree>[] = [];
         const groupedComponentIdsByWidgetName: Partial<Record<Widget["name"], Widget["componentId"][]>> = {};
 

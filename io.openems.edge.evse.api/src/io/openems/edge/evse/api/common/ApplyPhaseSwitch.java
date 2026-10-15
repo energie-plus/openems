@@ -8,8 +8,14 @@ import com.google.gson.JsonNull;
 
 import io.openems.common.jsonrpc.serialization.JsonSerializer;
 import io.openems.common.jsonrpc.serialization.PolymorphicSerializer;
+import io.openems.edge.common.type.Phase;
 
-public record ApplyPhaseSwitch(PhaseSwitchDirection direction, PhaseSwitchAbility ability) {
+public record ApplyPhaseSwitch(PhaseSwitchDirection direction, PhaseSwitchAbility ability,
+		ApplySetPoint.Ability.Watt oppositePhaseApplySetPoint) {
+
+	public ApplyPhaseSwitch(PhaseSwitchDirection direction, PhaseSwitchAbility ability) {
+		this(direction, ability, null);
+	}
 
 	/**
 	 * Returns a {@link JsonSerializer} for a {@link ApplyPhaseSwitch}.
@@ -19,11 +25,16 @@ public record ApplyPhaseSwitch(PhaseSwitchDirection direction, PhaseSwitchAbilit
 	public static JsonSerializer<ApplyPhaseSwitch> serializer() {
 		return jsonObjectSerializer(ApplyPhaseSwitch.class, json -> new ApplyPhaseSwitch(//
 				json.getOptionalEnum("direction", PhaseSwitchDirection.class).orElse(null),
-				json.getObject("phaseSwitchAbility", PhaseSwitchAbility.serializer())),
+				json.getObject("phaseSwitchAbility", PhaseSwitchAbility.serializer()),
+				json.getObjectOrNull("oppositePhaseApplySetPoint", ApplySetPoint.Ability.Watt.serializer())),
 				obj -> obj == null //
 						? JsonNull.INSTANCE //
 						: buildJsonObject() //
 								.add("phaseSwitchAbility", PhaseSwitchAbility.serializer().serialize(obj.ability)) //
+								.add("oppositePhaseApplySetPoint", obj.oppositePhaseApplySetPoint == null //
+										? JsonNull.INSTANCE
+										: ApplySetPoint.Ability.Watt.serializer()
+												.serialize(obj.oppositePhaseApplySetPoint)) //
 								.addProperty("direction", obj.direction) //
 								.build());
 	}
@@ -39,6 +50,8 @@ public record ApplyPhaseSwitch(PhaseSwitchDirection direction, PhaseSwitchAbilit
 			final var polymorphicSerializer = PolymorphicSerializer.<PhaseSwitchAbility>create() //
 					.add(Internal.class, Internal.serializer(), Internal.class.getSimpleName()) //
 					.add(Manual.class, Manual.serializer(), Manual.class.getSimpleName()) //
+					.add(ManualWithoutZeroSetPoint.class, ManualWithoutZeroSetPoint.serializer(),
+							ManualWithoutZeroSetPoint.class.getSimpleName()) //
 					.build();
 
 			return jsonSerializer(PhaseSwitchAbility.class,
@@ -85,10 +98,35 @@ public record ApplyPhaseSwitch(PhaseSwitchDirection direction, PhaseSwitchAbilit
 								.build());
 			}
 		}
+
+		record ManualWithoutZeroSetPoint() implements PhaseSwitchAbility {
+
+
+			/**
+			 * Returns a {@link JsonSerializer} for {@link ManualWithoutZeroSetPoint}.
+			 *
+			 * @return the created {@link JsonSerializer}
+			 */
+			public static JsonSerializer<ManualWithoutZeroSetPoint> serializer() {
+				return jsonObjectSerializer(//
+						json -> new ManualWithoutZeroSetPoint(), //
+						obj -> buildJsonObject() //
+								.build());
+			}
+		}
 	}
 
 	public enum PhaseSwitchDirection {
 		TO_SINGLE_PHASE, //
 		TO_THREE_PHASE, //
+
+		;
+
+		public Phase.SingleOrThreePhase getTargetPhase() {
+			return switch (this) {
+			case TO_SINGLE_PHASE -> Phase.SingleOrThreePhase.SINGLE_PHASE;
+			case TO_THREE_PHASE -> Phase.SingleOrThreePhase.THREE_PHASE;
+			};
+		}
 	}
 }

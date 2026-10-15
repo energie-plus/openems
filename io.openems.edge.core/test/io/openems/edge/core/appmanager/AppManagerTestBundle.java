@@ -55,7 +55,6 @@ import io.openems.edge.core.appmanager.dependency.AppManagerAppHelper;
 import io.openems.edge.core.appmanager.dependency.DependencyUtil;
 import io.openems.edge.core.appmanager.dependency.aggregatetask.ComponentAggregateTask;
 import io.openems.edge.core.appmanager.dependency.aggregatetask.ComponentAggregateTaskImpl;
-import io.openems.edge.core.appmanager.dependency.aggregatetask.EnergySchedulerVersionAggregateTaskImpl;
 import io.openems.edge.core.appmanager.dependency.aggregatetask.EvseClusterTaskImpl;
 import io.openems.edge.core.appmanager.dependency.aggregatetask.PersistencePredictorAggregateTask;
 import io.openems.edge.core.appmanager.dependency.aggregatetask.PersistencePredictorAggregateTaskImpl;
@@ -476,18 +475,6 @@ public class AppManagerTestBundle {
 	}
 
 	/**
-	 * Adds a {@link EnergySchedulerVersionAggregateTaskImpl} to the current active
-	 * tasks.
-	 *
-	 * @return the created {@link EnergySchedulerVersionAggregateTaskImpl}
-	 */
-	public EnergySchedulerVersionAggregateTaskImpl addEnergySchedulerVersionAggregateTask() {
-		final var task = new EnergySchedulerVersionAggregateTaskImpl(this.componentManger);
-		this.appHelper.addAggregateTask(task);
-		return task;
-	}
-
-	/**
 	 * Gets the {@link ComponentContext} for an {@link OpenemsApp} of the given
 	 * appId.
 	 * 
@@ -747,6 +734,17 @@ public class AppManagerTestBundle {
 	public AddAppInstance.Response tryInstallWithMinConfig(OpenemsApp app) throws OpenemsNamedException {
 		return this.sut.handleAddAppInstanceRequest(DUMMY_ADMIN,
 				new AddAppInstance.Request(app.getAppId(), "key", "alias", Apps.getMinConfig(app.getAppId())));
+	}
+
+	/**
+	 * Creates fluent permission assertions for the given app.
+	 *
+	 * @param app        the app under test
+	 * @param properties valid properties to install the app with
+	 * @return the {@link AppPermissionAssertions}
+	 */
+	public AppPermissionAssertions assertPermissions(OpenemsApp app, JsonObject properties) {
+		return new AppPermissionAssertions(this, app, properties);
 	}
 
 }

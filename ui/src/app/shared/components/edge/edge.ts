@@ -5,8 +5,10 @@ import { compareVersions } from "compare-versions";
 import { BehaviorSubject, Subject } from "rxjs";
 import { filter, first } from "rxjs/operators";
 import { SumState } from "src/app/index/shared/sumState";
-import { UserComponent } from "src/app/user/user.component";
+import { environment } from "src/environments";
+import { UnimplementedInEdgeError } from "../../errors/errors";
 import { JsonrpcRequest, JsonrpcResponseSuccess } from "../../jsonrpc/base";
+import { JsonRpcUtils } from "../../jsonrpc/jsonrpcutils";
 import { CurrentDataNotification } from "../../jsonrpc/notification/currentDataNotification";
 import { EdgeConfigNotification } from "../../jsonrpc/notification/edgeConfigNotification";
 import { SystemLogNotification } from "../../jsonrpc/notification/systemLogNotification";
@@ -22,22 +24,29 @@ import { SubscribeChannelsRequest } from "../../jsonrpc/request/subscribeChannel
 import { SubscribeSystemLogRequest } from "../../jsonrpc/request/subscribeSystemLogRequest";
 import { UpdateAppConfigRequest } from "../../jsonrpc/request/updateAppConfigRequest";
 import { UpdateComponentConfigRequest } from "../../jsonrpc/request/updateComponentConfigRequest";
+import { UpdateEdgeSettingsRequest } from "../../jsonrpc/request/updateEdgeSettingsRequest";
 import { GetChannelResponse } from "../../jsonrpc/response/getChannelResponse";
 import { Channel, GetChannelsOfComponentResponse } from "../../jsonrpc/response/getChannelsOfComponentResponse";
 import { GetEdgeConfigResponse } from "../../jsonrpc/response/getEdgeConfigResponse";
 import { GetPropertiesOfFactoryResponse } from "../../jsonrpc/response/getPropertiesOfFactoryResponse";
+import { User } from "../../jsonrpc/shared";
 import { ChannelAddress, Service, SystemLog, Websocket } from "../../shared";
 import { Role } from "../../type/role";
-import { Widgets } from "../../type/widgets";
-import { ArrayUtils } from "../../utils/array/array.utils";
-import { ObjectUtils } from "../../utils/object/object-utils";
 import { StringUtils } from "../../utils/string/string.utils";
-import { AvailableScope, NavigationId, NavigationTree, PageFilterCombineMode, PageFilterMode, PageFilterSet, } from "../navigation/shared";
+import { SharedBottomNavigationBar } from "../navigation/bottom-bar/shared";
+import { NavigationId, NavigationTree } from "../navigation/shared";
 import { CurrentData } from "./currentdata";
 import { EdgeConfig } from "./edgeconfig";
 
 export enum EdgeSettings {
-    ANNUAL_REVIEW_2025 = "annual_review_2025",
+    FAVORITES = "favorites",
+}
+
+interface EdgeSettingsConfig {
+    [EdgeSettings.FAVORITES]?: {
+        includes: string[];
+        excludes: string[];
+    };
 }
 
 export class Edge {
@@ -70,13 +79,11 @@ export class Edge {
         public isOnline: boolean,
         public readonly lastmessage: Date,
         public readonly sumState: SumState,
-        public readonly firstSetupProtocol: Date,
-        public settings: Partial<{
-            [k in EdgeSettings]: number | boolean | string;
-        }>,
+        public readonly firstSetupProtocol: Date | null,
+        public settings: EdgeSettingsConfig,
     ) {}
 
-    setIsSubscribed(isSubscribed: boolean) {
+    public setIsSubscribed(isSubscribed: boolean) {
         this.isSubscribed = isSubscribed;
     }
 
@@ -206,20 +213,7 @@ export class Edge {
      * @param channels The subscribed Channel-Addresses
      */
     public subscribeChannelsWithState(websocket: Websocket, id: string, channels: ChannelAddress[]): void {
-        const previousChannels = Object.values(this.subscribedChannels)
-            .flat()
-            .map((channel) => channel.toString());
-        this.subscribedChannels[id] = channels;
-
-        const channelsToSubscribe = channels.map((channel) => channel.toString());
-
-        if (
-            previousChannels.length > 0 &&
-            ArrayUtils.containsAll({
-                strings: channelsToSubscribe,
-                arr: previousChannels,
-            })
-        ) {
+        if (!this.replaceSubscription(id, channels)) {
             return;
         }
 
@@ -234,20 +228,7 @@ export class Edge {
      * @param channels The subscribed Channel-Addresses
      */
     public subscribeChannels(websocket: Websocket, id: string, channels: ChannelAddress[]): void {
-        const previousChannels = Object.values(this.subscribedChannels)
-            .flat()
-            .map((channel) => channel.toString());
-        this.subscribedChannels[id] = channels;
-
-        const channelsToSubscribe = channels.map((channel) => channel.toString());
-
-        if (
-            previousChannels.length > 0 &&
-            ArrayUtils.containsAll({
-                strings: channelsToSubscribe,
-                arr: previousChannels,
-            })
-        ) {
+        if (!this.replaceSubscription(id, channels)) {
             return;
         }
 
@@ -275,21 +256,20 @@ export class Edge {
      */
     public unsubscribeChannels(websocket: Websocket, id: string): void {
         const subscribedChannelsById = this.subscribedChannels[id];
-        delete this.subscribedChannels[id];
+        if (subscribedChannelsById == null) {
+            return;
+        }
 
-        const previousChannels = Object.values(this.subscribedChannels)
-            .flat()
-            .map((channel) => channel.toString());
-        const unsubscribeChannels = Object.values(subscribedChannelsById ?? {})
-            .flat()
-            .map((channel) => channel.toString());
+        this.removeChannelSubscription(id);
 
-        if (
-            ArrayUtils.containsAll({
-                arr: previousChannels,
-                strings: unsubscribeChannels,
-            })
-        ) {
+        const remainingChannels = new Set(
+            Object.values(this.subscribedChannels)
+                .flat()
+                .map((channel) => channel.toString()),
+        );
+
+        // Skip the request if other subscriptions still cover all removed channels
+        if (subscribedChannelsById.every((channel) => remainingChannels.has(channel.toString()))) {
             return;
         }
 
@@ -314,45 +294,23 @@ export class Edge {
      * @todo Should be renamed to `unsubscribeChannels` after unsubscribeChannels is removed
      */
     public unsubscribeFromChannels(subscribeId: string, websocket: Websocket, channels: ChannelAddress[]) {
-        const subscribedChannels = Object.entries(this.subscribedChannels).reduce((arr, [id, subscribedChannels]) => {
-            const areChannelsEqual = ArrayUtils.equalsCheck(
-                channels.map((channel) => channel.toString()),
-                subscribedChannels.map((channel) => channel.toString()),
-            );
-            const channelsUsedByOtherSubscriptions = Object.entries(this.subscribedChannels)
-                .filter(([otherId, _]) => otherId !== id)
-                .some(([_, otherSubscribedChannels]) => {
-                    return channels.some((channel) =>
-                        otherSubscribedChannels.some((osc) => osc.toString() === channel.toString()),
-                    );
-                });
+        const subscribedChannelIds = new Set(channels.map((channel) => channel.toString()));
+        const currentSubscription = this.subscribedChannels[subscribeId];
 
-            if (areChannelsEqual && channelsUsedByOtherSubscriptions == false) {
-                // removes matching channels from subscribedChannels
-                return arr;
-            }
-
-            arr[id] = subscribedChannels;
-            return arr;
-        }, {});
-
-        const previousChannels = Object.values(this.subscribedChannels).map((channel) => channel.toString());
-        const newChannels = Object.entries(subscribedChannels)
-            .filter(([otherId, _]) => otherId !== subscribeId)
-            .map(([_, channel]) => channel.toString());
-
-        if (
-            ArrayUtils.containsAll({
-                strings: newChannels,
-                arr: previousChannels,
-            }) &&
-            previousChannels.length === newChannels.length
-        ) {
-            // no change in channels, do not send subscribe request
+        if (currentSubscription == null) {
             return;
         }
 
-        this.subscribedChannels = subscribedChannels;
+        const remainingChannels = currentSubscription.filter(
+            (channel) => !subscribedChannelIds.has(channel.toString()),
+        );
+
+        if (remainingChannels.length === 0) {
+            this.removeChannelSubscription(subscribeId);
+        } else {
+            this.subscribedChannels[subscribeId] = remainingChannels;
+        }
+
         this.sendSubscribeChannels(websocket);
     }
 
@@ -376,8 +334,9 @@ export class Edge {
 
     /** Handles a EdgeConfigNotification */
     public handleEdgeConfigNotification(message: EdgeConfigNotification): void {
-        this.config.next(new EdgeConfig(this, message.params));
-        this._config.set(new EdgeConfig(this, message.params));
+        const config = new EdgeConfig(this, message.params);
+        this.config.next(config);
+        this._config.set(config);
     }
 
     /** Handles a CurrentDataNotification */
@@ -615,179 +574,95 @@ export class Edge {
      * @param translate The translate
      * @returns The new navigation tree
      */
-    public async createNavigationTree(
-        translate: TranslateService,
-        edge: Edge,
-        service: Service,
-    ): Promise<NavigationTree> {
+    public createNavigationTree(translate: TranslateService, edge: Edge, service: Service, user: User): NavigationTree {
+        const config = this.getConfigSignal()();
+        const sharedBottomNavigationBarTree = SharedBottomNavigationBar.getNavigationTree(
+            edge,
+            config,
+            translate,
+            service,
+            user,
+        );
         const baseNavigationTree: (translate: TranslateService) => ConstructorParameters<typeof NavigationTree> = (
             translate,
         ) => [
-            NavigationId.LIVE,
-            { baseString: "device/" + edge.id + "/live" },
+            NavigationId.ROOT,
+            { baseString: "device/" + edge.id },
             { name: "home-outline" },
-            "live",
+            "root",
             "icon",
-            [],
+            sharedBottomNavigationBarTree,
             null,
+            { hideFavorite: true },
         ];
 
         const _baseNavigationTree: ConstructorParameters<typeof NavigationTree> = baseNavigationTree(
             translate,
         ).slice() as ConstructorParameters<typeof NavigationTree>;
         const navigationTree = new NavigationTree(..._baseNavigationTree);
-
-        // TODO find automated way to create reference for parents
-
-        if (edge.isOnline === false) {
-            return navigationTree;
-        }
-
-        const config = this.config.getValue();
-        this.addCommonWidgetNavigation(edge, config, navigationTree, translate);
-        this.addControllerNavigation(edge, config, navigationTree, translate);
-        navigationTree.setChild(
-            NavigationId.LIVE,
-            new NavigationTree(
-                NavigationId.HISTORY,
-                { baseString: "history" },
-                { name: "stats-chart-outline" },
-                translate.instant("GENERAL.HISTORY"),
-                "label",
-                [
-                    new NavigationTree(
-                        "export",
-                        { baseString: "export" },
-                        { name: "download-outline" },
-                        translate.instant("EDGE.CONFIG.INDEX.EXPORT"),
-                        "label",
-                        [],
-                        null,
-                    ),
-                ],
-                null,
-                { showOrder: "LOW" },
-            ),
-        );
-        this.addGlobalNavigation(service, navigationTree, translate);
-        navigationTree.setChild(NavigationId.LIVE, UserComponent.getNavigationTree(service, translate));
-        navigationTree.reorderByShowOrder(navigationTree);
         return navigationTree;
     }
 
-    public shouldShowAnnualReviewPopover(): boolean {
-        return (
-            this.role === Role.OWNER &&
-            ObjectUtils.getValueByKeySafely(this.settings, EdgeSettings.ANNUAL_REVIEW_2025) != null
-        );
-    }
-
-    private addCommonWidgetNavigation(
-        edge: Edge,
-        config: EdgeConfig,
-        currentNavigationTree: NavigationTree,
-        translate: TranslateService,
-    ): void {
-        const classes = Widgets.parseWidgets(edge, config).classes;
-
-        for (const clazz of classes) {
-            const navigationTree: ConstructorParameters<typeof NavigationTree> | null = Widgets.getCommonNavigationTree(
-                edge,
-                clazz,
-                translate,
-                config,
-            );
-
-            if (navigationTree == null) {
-                continue;
-            }
-            currentNavigationTree.setChild(NavigationId.LIVE, new NavigationTree(...navigationTree));
+    /**
+     * Updates the settings for this edge.
+     *
+     * @param key The key to update
+     * @param value The value for given key
+     */
+    public async updateEdgeSettingsWithProperty<K extends keyof EdgeSettingsConfig>(
+        key: K,
+        value: EdgeSettingsConfig[K],
+        websocket: Websocket,
+    ) {
+        const updatedSettings: Edge["settings"] = { ...this.settings, [key]: value };
+        const [err, _result] = await this.updateEdgeSettings(updatedSettings, websocket);
+        if (err !== null) {
+            throw err;
         }
+
+        this.settings = updatedSettings;
+        return Promise.resolve();
     }
 
-    private addControllerNavigation(
-        edge: Edge,
-        config: EdgeConfig,
-        currentNavigationTree: NavigationTree,
-        translate: TranslateService,
-    ): void {
-        const controllerNavigationTrees = Widgets.getControllerNavigationTrees(edge, translate, config);
-
-        for (const navigationTree of controllerNavigationTrees) {
-            if (navigationTree == null) {
-                continue;
-            }
-
-            currentNavigationTree.setChild(NavigationId.LIVE, new NavigationTree(...navigationTree));
-        }
-    }
-
-    private addGlobalNavigation(
-        service: Service,
-        currentNavigationTree: NavigationTree,
-        translate: TranslateService,
-    ): void {
-        const settingsFilter: PageFilterSet = {
-            combine: PageFilterCombineMode.ANY,
-            rules: [{ navigationId: "system-overview", mode: PageFilterMode.HIDE }],
+    public getFavoritesFromSettings(): (typeof this.settings)[EdgeSettings.FAVORITES] {
+        const favorites = this.settings?.[EdgeSettings.FAVORITES];
+        return {
+            includes: Array.isArray(favorites?.includes) ? favorites.includes : [],
+            excludes: Array.isArray(favorites?.excludes) ? favorites.excludes : [],
         };
+    }
 
-        currentNavigationTree.setChild(
-            NavigationId.LIVE,
-            new NavigationTree(
-                "settings",
-                { baseString: "settings" },
-                { name: "cog-outline" },
-                translate.instant("MENU.EDGE_SYSTEM_SETTINGS"),
-                "label",
-                [],
-                null,
-                {
-                    availableScope: AvailableScope.LOCAL,
-                    pageFilter: settingsFilter,
-                },
-            ),
+    /** Removes the channel subscription entry for the given subscription id. */
+    private removeChannelSubscription(subscriptionId: string): void {
+        this.subscribedChannels = Object.fromEntries(
+            Object.entries(this.subscribedChannels).filter(([id]) => id !== subscriptionId),
         );
-        currentNavigationTree.setChild(NavigationId.LIVE, UserComponent.getNavigationTree(service, translate));
-        currentNavigationTree.setChild(
-            NavigationId.LIVE,
-            new NavigationTree(
-                "navigation-info",
-                { baseString: "navigation-info" },
-                { name: "information-outline" },
-                translate.instant("GENERAL.HELP"),
-                "label",
-                [],
-                null,
-                { availableScope: AvailableScope.LOCAL },
-            ),
-        );
+    }
 
-        const rootNavigationTree = new NavigationTree(
-            NavigationId.ROOT,
-            { baseString: "" },
-            { name: "menu-outline" },
-            "",
-            "hidden",
-            [],
-            null,
-            { availableScope: AvailableScope.LOCAL },
+    /**
+     * Replaces the channel subscription of the given subscription id and returns whether the union of all subscriptions
+     * changed.
+     *
+     * @param id A unique ID for this subscription (e.g. the component selector)
+     * @param channels The subscribed Channel-Addresses
+     * @returns True if the union of all subscriptions changed, i.e. the new state must be sent to the server
+     */
+    private replaceSubscription(id: string, channels: ChannelAddress[]): boolean {
+        const unionBefore = this.getSubscribedChannelIds();
+        this.subscribedChannels[id] = Array.of(...new Set([...(this.subscribedChannels[id] ?? []), ...channels]));
+        const unionAfter = this.getSubscribedChannelIds();
+        return (
+            unionBefore.size !== unionAfter.size || Array.from(unionBefore).some((channel) => !unionAfter.has(channel))
         );
-        rootNavigationTree.setChild(
-            NavigationId.ROOT,
-            new NavigationTree(
-                "system-overview",
-                { baseString: "overview" },
-                { name: "menu-outline" },
-                translate.instant("MENU.OVERVIEW"),
-                "label",
-                [],
-                null,
-                { customLink: "/overview" },
-            ),
-        );
+    }
 
-        currentNavigationTree.parent = rootNavigationTree;
+    /** Gets the ids of all channels across all current subscriptions. */
+    private getSubscribedChannelIds(): Set<string> {
+        return new Set(
+            Object.values(this.subscribedChannels)
+                .flat()
+                .map((channel) => channel.toString()),
+        );
     }
 
     /** Refresh the config. */
@@ -807,13 +682,15 @@ export class Edge {
         this.sendRequest(websocket, request)
             .then((response) => {
                 const edgeConfigResponse = response as GetEdgeConfigResponse;
-                this.config.next(new EdgeConfig(this, edgeConfigResponse.result));
-                this._config.set(new EdgeConfig(this, edgeConfigResponse.result));
+                const config = new EdgeConfig(this, edgeConfigResponse.result);
+                this.config.next(config);
+                this._config.set(config);
             })
             .catch((reason) => {
                 console.warn("Unable to refresh config", reason);
-                this.config.next(new EdgeConfig(this));
-                this._config.set(new EdgeConfig(this));
+                const config = new EdgeConfig(this);
+                this.config.next(config);
+                this._config.set(config);
             });
     }
 
@@ -874,5 +751,22 @@ export class Edge {
                     });
             }, 100);
         }
+    }
+
+    /**
+     * Updates the edge settings.
+     *
+     * @param settings The new settings to use
+     * @returns A Promise with either an Error or a JsonrpcResponseSuccess
+     */
+    private updateEdgeSettings(
+        settings: typeof this.settings,
+        websocket: Websocket,
+    ): Promise<[Error | null, JsonrpcResponseSuccess | null]> {
+        const request = new UpdateEdgeSettingsRequest({ edgeId: this.id, settings: settings });
+        if (environment.backend === "OpenEMS Edge") {
+            return Promise.resolve([new UnimplementedInEdgeError(request), null]);
+        }
+        return JsonRpcUtils.handle(websocket.sendRequest(request));
     }
 }

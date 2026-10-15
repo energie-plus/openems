@@ -2,7 +2,7 @@ import { formatNumber } from "@angular/common";
 import { TranslateService } from "@ngx-translate/core";
 import { Currency, CurrentData, EdgeConfig, GridMode, Limiter14aRestriction, RippleControlReceiverRestrictionLevel, Utils, } from "../../shared";
 
-import { EnabledDisabledState } from "../../type/general";
+import { EnabledDisabledState, Mode } from "../../type/general";
 import { Language } from "../../type/language";
 import { NumberUtils } from "../../utils/number/number-utils";
 import { TimeUtils } from "../../utils/time/timeutils";
@@ -39,11 +39,11 @@ export namespace Converter {
         return "" + value + " %";
     };
 
-    export const IF_NUMBER = (value: number | string | null, callback: (number: number) => string) => {
+    export const IF_NUMBER = (value: number | string | null | undefined, callback: (number: number) => string) => {
         if (typeof value === "number") {
             return callback(value);
         }
-        return "-"; // null or string
+        return "-"; // null, undefined or string
     };
 
     export const IF_STRING = (value: number | string | null, callback: (text: string) => string) => {
@@ -466,7 +466,7 @@ export namespace Converter {
     export const FORMAT_SECONDS_TO_DURATION: any = (locale: string) => {
         return (raw: number): any => {
             return IF_NUMBER(raw, (value) => {
-                return TimeUtils.formatSecondsToDuration(value, locale);
+                return TimeUtils.formatSecondsToDuration(value, locale) ?? "-";
             });
         };
     };
@@ -558,20 +558,22 @@ export namespace Converter {
         return (raw): string => {
             return IF_STRING(raw, (value) => {
                 switch (value) {
-                    case "AUTOMATIC":
+                    case Mode.AUTOMATIC:
                         return translate.instant("GENERAL.AUTOMATIC");
-                    case "MANUAL":
+                    case Mode.MANUAL:
                         return translate.instant("GENERAL.MANUALLY");
-                    case "MANUAL_ON":
-                    case "ON":
+                    case Mode.MANUAL_ON:
+                    case Mode.ON:
                         return translate.instant("GENERAL.ON");
-                    case "MANUAL_OFF":
-                    case "OFF":
+                    case Mode.MANUAL_OFF:
+                    case Mode.OFF:
                         return translate.instant("GENERAL.OFF");
-                    case "CHARGE_ONCE":
+                    case Mode.CHARGE_ONCE:
                         return translate.instant("GENERAL.CHARGE_ONCE");
-                    case "DISCHARGE_ONCE":
+                    case Mode.DISCHARGE_ONCE:
                         return translate.instant("GENERAL.DISCHARGE_ONCE");
+                    case "TIME_SCHEDULE":
+                        return translate.instant("GENERAL.TIME_SCHEDULE");
                 }
             });
         };

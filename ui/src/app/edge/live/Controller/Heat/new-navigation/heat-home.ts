@@ -1,16 +1,15 @@
 import { CommonModule } from "@angular/common";
-import { ChangeDetectionStrategy, Component, inject } from "@angular/core";
+import { Component } from "@angular/core";
 import { ReactiveFormsModule } from "@angular/forms";
 import { IonicModule } from "@ionic/angular";
 import { FormlyModule } from "@ngx-formly/core";
 import { TranslateModule, TranslateService } from "@ngx-translate/core";
 import { DataService } from "src/app/shared/components/shared/dataservice";
 import { AbstractFormlyComponent, OeFormlyField, OeFormlyView, } from "src/app/shared/components/shared/oe-formly-component";
-import { RouteService } from "src/app/shared/service/route.service";
 import { ChannelAddress, Edge, EdgeConfig } from "src/app/shared/shared";
 import { AssertionUtils } from "src/app/shared/utils/assertions/assertions.utils";
 import { TimeLineChartComponent } from "../../../../../shared/components/chart/timeline-chart/timeline-chart";
-import { EnergySchedulerV2 } from "../../../../../shared/components/edge/config-components/energy/energy";
+import { EnergyScheduler } from "../../../../../shared/components/edge/config-components/energy/energy";
 import { GetSchedule } from "../../../../../shared/components/edge/config-components/energy/getSchedule";
 import { Converter } from "../../../../../shared/components/shared/converter";
 import { LiveDataService } from "../../../livedataservice";
@@ -24,26 +23,22 @@ import { HeatConverter } from "./converter";
     selector: "oe-controller-heat-new-navigation",
     templateUrl: "../../../../../shared/components/formly/formly-field-modal/template.html",
     standalone: true,
-    changeDetection: ChangeDetectionStrategy.Eager,
     providers: [{ provide: DataService, useClass: LiveDataService }],
     imports: [CommonModule, IonicModule, ReactiveFormsModule, FormlyModule, TranslateModule],
 })
 export class ControllerHeatHomeComponent extends AbstractFormlyComponent {
     protected override formlyWrapper: "formly-field-modal" | "formly-field-navigation" = "formly-field-navigation";
 
-    private readonly routeService: RouteService = inject(RouteService);
-
     public static generateView(
         translate: TranslateService,
         component: EdgeConfig.Component,
         edge: Edge,
-        energyScheduler: EnergySchedulerV2,
+        energyScheduler: EnergyScheduler,
     ): OeFormlyView {
         return {
             title: component.alias,
             icon: { name: "oe-heating-element", color: "normal", size: "normal" },
-            helpKey: "REDIRECT.CONTROLLER_IO_HEATING_ELEMENT",
-            useDefaultPrefix: false,
+            helpKey: SharedControllerHeat.getHelpKey(component),
             lines: ControllerHeatHomeComponent.getLines(translate, component, edge, energyScheduler),
             component: component,
             edge: edge,
@@ -54,7 +49,7 @@ export class ControllerHeatHomeComponent extends AbstractFormlyComponent {
         translate: TranslateService,
         component: EdgeConfig.Component,
         edge: Edge,
-        energyScheduler: EnergySchedulerV2,
+        energyScheduler: EnergyScheduler,
     ): OeFormlyField[] {
         if (energyScheduler.schedule === GetSchedule.Response.empty) {
             return SharedControllerHeat.getLegacyViewLines(translate, component);
@@ -160,7 +155,7 @@ export class ControllerHeatHomeComponent extends AbstractFormlyComponent {
         AssertionUtils.assertIsDefined(config);
         const component = config.getComponentSafely(this.routeService.getRouteParam("componentId"));
         AssertionUtils.assertIsDefined(component);
-        const energyScheduler = new EnergySchedulerV2(config);
+        const energyScheduler = new EnergyScheduler(config);
         await energyScheduler.updateSchedule(edge, this.service.websocket);
 
         return ControllerHeatHomeComponent.generateView(this.translate, component, edge, energyScheduler);

@@ -5,13 +5,12 @@ import { IonicModule } from "@ionic/angular";
 import { FormlyModule } from "@ngx-formly/core";
 import { TranslateModule } from "@ngx-translate/core";
 import { LiveDataService } from "src/app/edge/live/livedataservice";
-import { EnergySchedulerV2 } from "src/app/shared/components/edge/config-components/energy/energy";
+import { EnergyScheduler } from "src/app/shared/components/edge/config-components/energy/energy";
 import { GetSchedule } from "src/app/shared/components/edge/config-components/energy/getSchedule";
 import { Converter } from "src/app/shared/components/shared/converter";
 import { DataService } from "src/app/shared/components/shared/dataservice";
 import { Name } from "src/app/shared/components/shared/name";
 import { AbstractFormlyComponent, OeFormlyField, OeFormlyView, } from "src/app/shared/components/shared/oe-formly-component";
-import { RouteService } from "src/app/shared/service/route.service";
 import { UserService } from "src/app/shared/service/user.service";
 import { ChannelAddress, CurrentData, Edge, EdgeConfig } from "src/app/shared/shared";
 import { AssertionUtils } from "src/app/shared/utils/assertions/assertions.utils";
@@ -31,8 +30,6 @@ import { ControllerBraiinsManagedConsumptionChartComponent } from "./chart/power
 export class ControllerBraiinsHomeComponent extends AbstractFormlyComponent {
     protected override formlyWrapper: "formly-field-modal" | "formly-field-navigation" = "formly-field-navigation";
     private component: EdgeConfig.Component | null = null;
-
-    private readonly routeService: RouteService = inject(RouteService);
     private readonly userService = inject(UserService);
 
     protected override async generateView(): Promise<OeFormlyView> {
@@ -44,7 +41,7 @@ export class ControllerBraiinsHomeComponent extends AbstractFormlyComponent {
         AssertionUtils.assertIsDefined(component);
         this.component = component;
 
-        const energyScheduler = new EnergySchedulerV2(config);
+        const energyScheduler = new EnergyScheduler(config);
         const lines = await this.getLines(component, edge, energyScheduler);
 
         return {
@@ -76,7 +73,7 @@ export class ControllerBraiinsHomeComponent extends AbstractFormlyComponent {
         AssertionUtils.assertIsDefined(braiinsComponent);
 
         this.setFormControlSafelyWithChannel(
-            this.form,
+            this.form(),
             "mode",
             currentData,
             new ChannelAddress(braiinsComponent.id, ControllerBraiinsShared.PROPERTY_MODE),
@@ -92,7 +89,7 @@ export class ControllerBraiinsHomeComponent extends AbstractFormlyComponent {
     private async getLines(
         component: EdgeConfig.Component,
         edge: Edge,
-        energyScheduler: EnergySchedulerV2,
+        energyScheduler: EnergyScheduler,
     ): Promise<OeFormlyField[]> {
         await energyScheduler?.updateSchedule(edge, this.service.websocket);
         const user = this.userService.currentUser();

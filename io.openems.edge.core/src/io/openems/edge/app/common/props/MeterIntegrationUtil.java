@@ -2,6 +2,7 @@ package io.openems.edge.app.common.props;
 
 import static io.openems.edge.app.common.components.CommonComponents.externMeter;
 import static io.openems.edge.app.common.components.CommonComponents.internMeter;
+import static io.openems.edge.app.common.components.CommonComponents.internMeterWithGen3;
 import static io.openems.edge.app.integratedsystem.FeneconHomeComponents.isHardwareInstalledForMasterBox;
 import static io.openems.edge.core.appmanager.AbstractOpenemsApp.getTranslationBundle;
 
@@ -123,7 +124,7 @@ public final class MeterIntegrationUtil {
 	 * already used, it returns the corresponding meter id. Otherwise, it generates
 	 * a new meter id with the prefix "meter" and a number that is not used by any
 	 * existing meter.
-	 * 
+	 *
 	 * @param app   the app
 	 * @param <APP> the type of the app, which must implement OpenemsApp,
 	 *              ComponentUtilSupplier and ComponentManagerSupplier
@@ -268,7 +269,7 @@ public final class MeterIntegrationUtil {
 	/**
 	 * Gets the meter id corresponding to the given alias. If there is no meter with
 	 * the given alias, it returns null.
-	 * 
+	 *
 	 * @param componentUtil the ComponentUtil
 	 * @param meterAlias    the alias of the meter to get the id for
 	 * @return the meter id corresponding to the given alias, or an empty string if
@@ -322,10 +323,15 @@ public final class MeterIntegrationUtil {
 			throw new OpenemsException("Intern meter already in use");
 		}
 
-		String meterId = isHardwareInstalledForMasterBox(deviceHardware) ? getMasterboxMeterId(app.getComponentUtil())
-				: MeterIntegrationUtil.getNextMeterId(app);
+		final String meterId;
+		if (isHardwareInstalledForMasterBox(deviceHardware)) {
+			meterId = getMasterboxMeterId(app.getComponentUtil());
+			dependencies.add(internMeterWithGen3(app.getComponentManager(), meterId));
+		} else {
+			meterId = MeterIntegrationUtil.getNextMeterId(app);
+			dependencies.add(internMeter(l, meterId));
+		}
 
-		dependencies.add(internMeter(l, meterId));
 		return meterId;
 	}
 

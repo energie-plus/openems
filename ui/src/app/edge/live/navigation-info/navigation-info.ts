@@ -6,12 +6,17 @@ import { TranslateService } from "@ngx-translate/core";
 import { AbstractModal } from "src/app/shared/components/modal/abstractModal";
 import { HelpButtonComponent } from "src/app/shared/components/modal/help-button/help-button";
 import { NavigationService } from "src/app/shared/components/navigation/service/navigation.service";
+import { RouteService } from "src/app/shared/service/route/route.service";
 import { Service, Websocket } from "src/app/shared/shared";
 import { Language } from "src/app/shared/type/language";
 import { Icon } from "src/app/shared/type/widget";
-import { environment } from "src/environments";
+import cz from "./i18n/cz.json";
 import de from "./i18n/de.json";
 import en from "./i18n/en.json";
+import es from "./i18n/es.json";
+import fr from "./i18n/fr.json";
+import ja from "./i18n/ja.json";
+import nl from "./i18n/nl.json";
 
 type IconWithRequiredName = Required<Pick<Icon, "name">> & Partial<Omit<Icon, "name">>;
 
@@ -19,6 +24,12 @@ type NavigationCardFooter = {
     text: string;
     link: string;
     linkText: string;
+};
+
+export type DocsMapValue = {
+    displayName: string;
+    icon: IconWithRequiredName;
+    link: NonNullable<HelpButtonComponent["key"]>;
 };
 
 export type NavigationCard = {
@@ -31,12 +42,27 @@ export type NavigationCard = {
     footer?: NavigationCardFooter;
 };
 
+const EVSE_DOC_LINKS = {
+    "Evse.ChargePoint.Keba.UDP": "REDIRECT.EVCS_KEBA",
+    "Evse.ChargePoint.Keba.Modbus": "REDIRECT.EVCS_KEBA",
+    "Evse.ChargePoint.HardyBarth": "REDIRECT.EVCS_HARDY_BARTH",
+    "Evse.ChargePoint.Alpitronic": "REDIRECT.EVCS_ALPITRONIC_HYPER",
+    "Evse.ChargePoint.Mennekes": "REDIRECT.EVCS_MENNEKES",
+    "Evse.ChargePoint.Alfen": "REDIRECT.EVSE_ALFEN",
+} as const;
+
 function initializeNavigationInfoTranslations(translate: TranslateService): void {
-    void Language.normalizeAdditionalTranslationFiles({ de: de, en: en }).then((translations) => {
-        for (const { lang, translation, shouldMerge } of translations) {
-            translate.setTranslation(lang, translation, shouldMerge);
-        }
-    });
+    void Language.normalizeAdditionalTranslationFiles({ cs: cz, de: de, en: en, es: es, fr: fr, ja: ja, nl: nl }).then(
+        (translations) => {
+            for (const { lang, translation, shouldMerge } of translations) {
+                translate.setTranslation(lang, translation, shouldMerge);
+            }
+        },
+    );
+}
+
+function isEvseDocLink(factoryId: string | null): factoryId is keyof typeof EVSE_DOC_LINKS {
+    return factoryId != null && factoryId in EVSE_DOC_LINKS;
 }
 
 @Component({
@@ -61,7 +87,7 @@ export class NavigationInfoComponent extends AbstractModal {
                 iconName: "information-outline",
                 contentText: this.translate.instant("BETA_TEST.CHANGELOG"),
                 buttonText: this.translate.instant("BETA_TEST.BUTTON"),
-                buttonHref: this.link ?? "",
+                buttonHref: "",
                 footer: {
                     text: this.translate.instant("BETA_TEST.FEEDBACK"),
                     link: "",
@@ -72,9 +98,13 @@ export class NavigationInfoComponent extends AbstractModal {
         return cards;
     });
 
-    protected link = environment.links.REDIRECT.BETA_CHANGE_LOG;
-    protected docs: { link: string | null; displayName: string; icon: IconWithRequiredName } | null = null;
+    protected docs: {
+        link: string | null;
+        displayName: string;
+        icon: IconWithRequiredName;
+    } | null = null;
 
+    private readonly routeService = inject(RouteService);
     private navigationService = inject(NavigationService);
 
     constructor(
@@ -91,12 +121,10 @@ export class NavigationInfoComponent extends AbstractModal {
         initializeNavigationInfoTranslations(translate);
     }
 
-    public static readonly DOCS_LINKS: (
-        translate: TranslateService,
-    ) => Map<
-        string,
-        { displayName: string; icon: IconWithRequiredName; link: NonNullable<HelpButtonComponent["key"]> }
-    > = (translate) =>
+    public static readonly DOCS_LINKS: (translate: TranslateService, factoryId: string) => Map<string, DocsMapValue> = (
+        translate,
+        factoryId,
+    ) =>
         new Map([
             [
                 "grid",
@@ -122,7 +150,7 @@ export class NavigationInfoComponent extends AbstractModal {
                 "storage",
                 {
                     displayName: translate.instant("NAVIGATION_INFO_MANUAL", {
-                        source: translate.instant("GENERAL.STORAGE"),
+                        source: translate.instant("GENERAL.STORAGE_SYSTEM"),
                     }),
                     link: "REDIRECT.COMMON_STORAGE",
                     icon: { name: "oe-storage" },
@@ -138,6 +166,40 @@ export class NavigationInfoComponent extends AbstractModal {
                     icon: { name: "oe-consumption" },
                 },
             ],
+            [
+                "autarchy",
+                {
+                    displayName: translate.instant("NAVIGATION_INFO_MANUAL", {
+                        source: translate.instant("GENERAL.AUTARCHY"),
+                    }),
+                    link: "REDIRECT.COMMON_AUTARCHY",
+                    icon: { name: "oe-grid" },
+                },
+            ],
+            [
+                "selfconsumption",
+                {
+                    displayName: translate.instant("NAVIGATION_INFO_MANUAL", {
+                        source: translate.instant("GENERAL.SELF_CONSUMPTION"),
+                    }),
+                    link: "REDIRECT.COMMON_SELFCONSUMPTION",
+                    icon: { name: "oe-selfconsumption" },
+                },
+            ],
+            ...(isEvseDocLink(factoryId)
+                ? [
+                      [
+                          factoryId,
+                          {
+                              displayName: translate.instant("NAVIGATION_INFO_MANUAL", {
+                                  source: translate.instant("EDGE.INDEX.WIDGETS.EVCS.CHARGING_STATION"),
+                              }),
+                              link: EVSE_DOC_LINKS[factoryId],
+                              icon: { name: "oe-consumption" },
+                          },
+                      ] as const,
+                  ]
+                : []),
         ]);
 
     ionViewWillLeave() {
@@ -145,6 +207,33 @@ export class NavigationInfoComponent extends AbstractModal {
     }
 
     ionViewWillEnter() {
-        this.navigationService.headerTitle.set(this.translate.instant("GENERAL.INFO"));
+        this.resolveSourceAndMode();
+        this.setHeaderTitle();
+    }
+
+    protected override onIsInitialized(): void {
+        this.setHeaderTitle();
+    }
+
+    private resolveSourceAndMode(): void {
+        const source = this.route.snapshot.queryParamMap.get("source");
+        this.isGlobalInfo.set(source === "global");
+
+        if (source && source !== "global") {
+            const page = NavigationInfoComponent.DOCS_LINKS(this.translate, source).get(source);
+            if (page != null) {
+                this.docs = {
+                    displayName: page.displayName,
+                    icon: page.icon,
+                    link: HelpButtonComponent.getLink(page.link, this.service) ?? null,
+                };
+            }
+        }
+    }
+
+    private setHeaderTitle(): void {
+        this.navigationService.headerTitle.set(
+            this.translate.instant(this.isGlobalInfo() ? "GENERAL.HELP" : "GENERAL.INFO"),
+        );
     }
 }

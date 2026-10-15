@@ -3,27 +3,28 @@ package io.openems.edge.core.host;
 import java.net.Inet4Address;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 
 import io.openems.common.exceptions.NotImplementedException;
 import io.openems.common.exceptions.OpenemsError.OpenemsNamedException;
 import io.openems.common.jsonrpc.base.JsonrpcResponseSuccess;
+import io.openems.edge.common.jsonrpc.request.ExecuteSystemCommandRequest;
+import io.openems.edge.common.jsonrpc.request.ExecuteSystemCommandRequest.SystemCommand;
+import io.openems.edge.common.jsonrpc.request.ExecuteSystemRestartRequest;
+import io.openems.edge.common.jsonrpc.response.ExecuteSystemCommandResponse;
+import io.openems.edge.common.jsonrpc.response.ExecuteSystemCommandResponse.SystemCommandResponse;
 import io.openems.edge.common.update.Updateable;
 import io.openems.edge.common.user.User;
 import io.openems.edge.core.host.Bash.Command;
-import io.openems.edge.core.host.jsonrpc.ExecuteSystemCommandRequest;
-import io.openems.edge.core.host.jsonrpc.ExecuteSystemCommandRequest.SystemCommand;
-import io.openems.edge.core.host.jsonrpc.ExecuteSystemCommandResponse;
-import io.openems.edge.core.host.jsonrpc.ExecuteSystemCommandResponse.SystemCommandResponse;
-import io.openems.edge.core.host.jsonrpc.ExecuteSystemRestartRequest;
 import io.openems.edge.core.host.jsonrpc.GetNetworkInfo;
 import io.openems.edge.core.host.jsonrpc.SetNetworkConfig;
 
 /**
  * OperatingSystem implementation for Debian with systemd.
  */
-public class OperatingSystemDocker implements OperatingSystem {
+public class OperatingSystemDocker extends OperatingSystemLinux implements OperatingSystem {
 
 	protected OperatingSystemDocker() {
 	}
@@ -91,6 +92,11 @@ public class OperatingSystemDocker implements OperatingSystem {
 	@Override
 	public void deleteNetworkInterfaces(User user, List<String> interfaceNames) throws OpenemsNamedException {
 		throw new NotImplementedException("deleteNetworkInterfaces is not implemented for Docker");
+	}
+
+	@Override
+	public Optional<Double> getCpuTemperature() {
+		return Optional.empty();
 	}
 
 }

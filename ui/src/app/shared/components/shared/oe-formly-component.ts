@@ -1,19 +1,21 @@
-import { Directive, effect, EffectRef, inject, Injector, OnDestroy, Type, } from "@angular/core";
+import { Directive, effect, EffectRef, inject, Injector, OnDestroy, signal, Type } from "@angular/core";
 import { FormGroup } from "@angular/forms";
-import { IonInput } from "@ionic/angular";
+import { IonInput, IonRange } from "@ionic/angular";
 import { FormlyFieldConfig } from "@ngx-formly/core";
 import { TranslateService } from "@ngx-translate/core";
 import { Subject } from "rxjs";
 import { filter, finalize, take, takeUntil } from "rxjs/operators";
-import { ChannelAddress, CurrentData, Edge, EdgeConfig, Service, Websocket, } from "../../shared";
+import { RouteService } from "../../service/route/route.service";
+import { ChannelAddress, CurrentData, Edge, EdgeConfig, Service, Websocket } from "../../shared";
 import { SharedModule } from "../../shared.module";
 import { MultiLengthArray, TIntRange } from "../../type/utility";
 import { Icon } from "../../type/widget";
 import { AssertionUtils } from "../../utils/assertions/assertions.utils";
 import { FormUtils } from "../../utils/form/form.utils";
+import { NumberUtils } from "../../utils/number/number-utils";
 import { AbstractModalLine } from "../modal/abstract-modal-line";
 import { ButtonLabel } from "../modal/modal-button/modal-button";
-import { ModalLineComponent, TextIndentation, } from "../modal/modal-line/modal-line";
+import { TextIndentation } from "../modal/modal-line/modal-line";
 import { NavigationService } from "../navigation/service/navigation.service";
 import { OeImageComponent } from "../oe-img/oe-img";
 import { Stat } from "../stats/stats";
@@ -22,21 +24,18 @@ import { DataService } from "./dataservice";
 import { Filter } from "./filter";
 
 @Directive()
-export abstract class AbstractFormlyComponent<
-    T = unknown,
-> implements OnDestroy {
+export abstract class AbstractFormlyComponent<T = unknown> implements OnDestroy {
+    protected readonly fields = signal<FormlyFieldConfig[]>([]);
+    protected readonly form = signal<FormGroup>(new FormGroup({}));
+    protected readonly view = signal<OeFormlyView<T> | null>(null);
     protected readonly translate: TranslateService;
     protected readonly service: Service = inject(Service);
-    protected readonly navigationService: NavigationService =
-        inject(NavigationService);
+    protected readonly navigationService: NavigationService = inject(NavigationService);
+    protected readonly routeService: RouteService = inject(RouteService);
     protected SKIP_COUNT: number = 2;
     protected dataService: DataService;
-    protected fields: FormlyFieldConfig[] = [];
-    protected form: FormGroup = new FormGroup({});
-    protected formlyWrapper:
-        | "formly-field-modal"
-        | "formly-field-navigation"
-        | "formly-field-waiting-spinner" = "formly-field-modal";
+    protected formlyWrapper: "formly-field-modal" | "formly-field-navigation" | "formly-field-waiting-spinner" =
+        "formly-field-modal";
 
     protected stopOnDestroy: Subject<void> = new Subject<void>();
 
@@ -44,17 +43,13 @@ export abstract class AbstractFormlyComponent<
     protected skipCurrentData: boolean = false;
     private injector: Injector = inject(Injector);
     private subscription: EffectRef | null = null;
-    private view: OeFormlyView<T> | null = null;
 
     constructor() {
         this.initializeView();
 
-        this.translate =
-            SharedModule.injector.get<TranslateService>(TranslateService);
-        this.navigationService =
-            SharedModule.injector.get<NavigationService>(NavigationService);
+        this.translate = SharedModule.injector.get<TranslateService>(TranslateService);
+        this.navigationService = SharedModule.injector.get<NavigationService>(NavigationService);
         this.dataService = inject(DataService);
-        const websocket = inject(Websocket);
 
         this.service.getCurrentEdge().then(async (edge) => {
             // Subscribe on channels only once
@@ -62,6 +57,7 @@ export abstract class AbstractFormlyComponent<
                 .pipe(
                     filter((config) => !!config),
                     take(1),
+                    takeUntil(this.stopOnDestroy),
                 )
                 .subscribe(() => this.subscribeChannels(this.service));
 
@@ -79,15 +75,14 @@ export abstract class AbstractFormlyComponent<
                         config: config,
                         translate: this.translate,
                     });
-                    this.view = view;
-                    this.form = this.getFormGroup();
-                    this.setFields(view, this.form, websocket);
+                    this.view.set(view);
+                    this.form.set(this.getFormGroup());
+                    this.setFields(view, this.form(), this.service.websocket);
                 });
         });
 
         effect(() => {
-            const isNavigationInitialized =
-                this.navigationService.getIsInitialized();
+            const isNavigationInitialized = this.navigationService.getIsInitialized();
             if (!isNavigationInitialized) {
                 return;
             }
@@ -96,21 +91,20 @@ export abstract class AbstractFormlyComponent<
     }
 
     ionViewWillEnter() {
-        this.navigationService.headerTitle.set(
-            this.view?.isCommonWidget ? this.view.title : null,
-        );
+        this.navigationService.headerTitle.set(this.view()?.isCommonWidget ? this.view()!.title : null);
     }
 
     ionViewWillLeave() {
+        this.navigationService.headerTitle.set(null);
         this.ngOnDestroy();
     }
 
     public async ngOnDestroy() {
+        this.initializeView();
         this.stopOnDestroy.next();
         this.stopOnDestroy.complete();
-        this.dataService?.unsubscribeFromChannels(
-            await this.getChannelAddresses(),
-        );
+        this.subscription?.destroy();
+        this.dataService?.unsubscribeFromChannels(await this.getChannelAddresses());
     }
 
     /**
@@ -126,6 +120,44 @@ export abstract class AbstractFormlyComponent<
 
         this.dataService.subscribeChannels(channelAddresses, edge);
         this.fetchCurrentData(service);
+    }
+
+    /**
+     * Gets the current edge
+     *
+     * @returns {@link Edge} The current edge
+     */
+    protected getEdge(): Edge {
+        const edge = this.service.currentEdge();
+        AssertionUtils.assertIsDefined(edge);
+
+        return edge;
+    }
+
+    /**
+     * Gets the config from current edge
+     *
+     * @returns {@link EdgeConfig} The Config from the current Edge
+     */
+    protected getConfig(): EdgeConfig {
+        const edge = this.getEdge();
+        const config = edge.getCurrentConfig();
+        AssertionUtils.assertIsDefined(config);
+
+        return config;
+    }
+
+    /**
+     * Gets the component from the route params
+     *
+     * @returns {@link EdgeConfig.Component} The Component from the route params
+     */
+    protected getComponent(): EdgeConfig.Component {
+        const config = this.getConfig();
+        const component = config.getComponentSafely(this.routeService.getRouteParam("componentId"));
+        AssertionUtils.assertIsDefined(component);
+
+        return component;
     }
 
     /**
@@ -193,24 +225,12 @@ export abstract class AbstractFormlyComponent<
         AssertionUtils.assertIsDefined(edge);
 
         service.startSpinner("formly-field-modal");
-        edge.updateComponentConfig(
-            websocket,
-            component.id,
-            this.buildUpdateComponentArr(fg),
-        )
+        edge.updateComponentConfig(websocket, component.id, this.buildUpdateComponentArr(fg))
             .then(() => {
-                service.toast(
-                    this.translate.instant("GENERAL.CHANGE_ACCEPTED"),
-                    "success",
-                );
+                service.toast(this.translate.instant("GENERAL.CHANGE_ACCEPTED"), "success");
             })
             .catch((reason) => {
-                service.toast(
-                    this.translate.instant("GENERAL.CHANGE_FAILED") +
-                        "\n" +
-                        reason.error.message,
-                    "danger",
-                );
+                service.toast(this.translate.instant("GENERAL.CHANGE_FAILED") + "\n" + reason.error.message, "danger");
             })
             .finally(() => {
                 this.skipCurrentData = true;
@@ -220,15 +240,12 @@ export abstract class AbstractFormlyComponent<
     }
 
     /**
-     * Builds the update component array for the
-     * {@link Edge.updateComponentConfig} request.
+     * Builds the update component array for the {@link Edge.updateComponentConfig} request.
      *
      * @param fg The form group
      * @returns The update component array
      */
-    protected buildUpdateComponentArr(
-        fg: FormGroup<any>,
-    ): { name: string; value: any }[] {
+    protected buildUpdateComponentArr(fg: FormGroup<any>): { name: string; value: any }[] {
         const updateComponentArray: { name: string; value: any }[] = [];
         for (const key in fg.controls) {
             const control = fg.controls[key];
@@ -258,49 +275,22 @@ export abstract class AbstractFormlyComponent<
     }
 
     /**
-     * Sets the formControls value to a given channel value
+     * Sets the form controls value to a boolean from a given channel.
      *
      * @param fg The formGroup
-     * @param formControlName The control name to change
+     * @param formControlName The form control name
      * @param currentData The current data
-     * @param channel The channel to use
-     * @returns The new formGroup
+     * @param channel The channel value to retrieve
      */
-    protected setFormControlSafelyWithChannel<T>(
+    protected setFormControlSafelyWithBooleanChannel(
         fg: FormGroup,
         formControlName: string,
         currentData: CurrentData,
         channel: ChannelAddress | null,
-    ) {
-        if (channel === null) {
-            return;
-        }
-
-        const channelValue = currentData.allComponents[channel.toString()];
-        const control = fg.controls[formControlName];
-        if (
-            this.skipCurrentData ||
-            fg.dirty ||
-            fg.touched ||
-            !channel ||
-            channelValue == null ||
-            control == null
-        ) {
-            return;
-        }
-
-        const prevFormControlValue: T | null =
-            FormUtils.findFormControlsValueSafely(fg, formControlName);
-        const currFormControlValue: T | null = channelValue;
-
-        if (
-            currFormControlValue != null &&
-            prevFormControlValue !== currFormControlValue
-        ) {
-            control.setValue(currFormControlValue);
-            control.markAsPristine();
-            this.form = fg;
-        }
+    ): void {
+        this.setFormControlSafelyWithChannel(fg, formControlName, currentData, channel, (value) =>
+            NumberUtils.numberToBooleanOrElse(value, false),
+        );
     }
 
     /**
@@ -310,60 +300,80 @@ export abstract class AbstractFormlyComponent<
      * @param formControlName The control name to change
      * @param currentData The current data
      * @param channel The channel to use
-     * @returns The new formGroup
      */
-    protected setFormControlSafelyWithValue<T>(
+    protected setFormControlSafelyWithChannel<T>(
         fg: FormGroup,
         formControlName: string,
-        value: T | null,
-    ) {
+        currentData: CurrentData,
+        channel: ChannelAddress | null,
+        converter: (value: any) => T | null = (value) => value,
+    ): void {
+        if (channel === null) {
+            return;
+        }
+
+        const channelValue = currentData.allComponents[channel.toString()];
+        const control = fg.controls[formControlName];
+        if (this.skipCurrentData || fg.dirty || fg.touched || !channel || channelValue == null || control == null) {
+            return;
+        }
+
+        const convertedChannelValue: T | null = converter(channelValue);
+
+        const prevFormControlValue: T | null = FormUtils.findFormControlsValueSafely(fg, formControlName);
+        const currFormControlValue: T | null = convertedChannelValue;
+
+        if (currFormControlValue != null && prevFormControlValue !== currFormControlValue) {
+            control.setValue(currFormControlValue);
+            control.markAsPristine();
+            this.form.set(fg);
+        }
+    }
+
+    /**
+     * Sets the formControls value to a given value
+     *
+     * @param fg The formGroup
+     * @param formControlName The control name to change
+     * @param value The value to set
+     */
+    protected setFormControlSafelyWithValue<T>(fg: FormGroup, formControlName: string, value: T | null): void {
         const control = fg.controls[formControlName];
         if (control == null) {
             return;
         }
 
-        const prevFormControlValue: T | null =
-            FormUtils.findFormControlsValueSafely(fg, formControlName);
+        const prevFormControlValue: T | null = FormUtils.findFormControlsValueSafely(fg, formControlName);
         const currFormControlValue: T | null = value;
 
-        if (
-            currFormControlValue != null &&
-            prevFormControlValue !== currFormControlValue
-        ) {
+        if (currFormControlValue != null && prevFormControlValue !== currFormControlValue) {
             control.setValue(currFormControlValue);
             control.markAsPristine();
-            this.form = fg;
+            this.form.set(fg);
         }
     }
 
     /** Initializes the view with empty lines and shows progress spinner. */
     private initializeView() {
-        this.form = new FormGroup({});
-        this.fields = [];
-        this.view = {
+        this.form.set(new FormGroup({}));
+        this.fields.set([]);
+        this.view.set({
             component: new EdgeConfig.Component(),
             lines: [],
             title: "",
-        };
-        this.setFields(
-            this.view,
-            this.form,
-            this.service.websocket,
-            "formly-field-waiting-spinner",
-        );
+        });
+        this.setFields(this.view()!, this.form(), this.service.websocket, "formly-field-waiting-spinner");
     }
 
     private setFields(
         view: OeFormlyView<T>,
         fg: FormGroup,
         websocket: Websocket,
-        formlyWrapper:
-            | "formly-field-modal"
-            | "formly-field-navigation"
-            | "formly-field-waiting-spinner" = this.formlyWrapper,
+        formlyWrapper: "formly-field-modal" | "formly-field-navigation" | "formly-field-waiting-spinner" = this
+            .formlyWrapper,
     ) {
         this.ionViewWillEnter();
-        this.fields = [
+        this.fields.set([
             {
                 fieldGroup: view.lines.map((el, index) => {
                     return {
@@ -372,9 +382,7 @@ export abstract class AbstractFormlyComponent<
                                 title: view.title,
                                 ...(view.helpKey != null
                                     ? {
-                                          helpKey: view.helpKey as
-                                              | string
-                                              | number,
+                                          helpKey: view.helpKey as string | number,
                                       }
                                     : {}),
                             },
@@ -385,8 +393,7 @@ export abstract class AbstractFormlyComponent<
                             onInit: (field) => {
                                 // Evaluate hide immediately so fields are not all
                                 // briefly visible before the first valueChanges fires.
-                                field.hide =
-                                    el.hide?.(field.form?.value) ?? false;
+                                field.hide = el.hide?.(field.form?.value) ?? false;
                                 field.form?.valueChanges.subscribe((value) => {
                                     field.hide = el.hide?.(value) ?? false;
                                     if (
@@ -406,12 +413,8 @@ export abstract class AbstractFormlyComponent<
                 props: {
                     attributes: {
                         title: view.title,
-                        ...(view.icon != null && view.icon.name != null
-                            ? { icon: view.icon.name as string }
-                            : {}),
-                        ...(view.helpKey != null
-                            ? { helpKey: view.helpKey as string | number }
-                            : {}),
+                        ...(view.icon != null && view.icon.name != null ? { icon: view.icon.name as string } : {}),
+                        ...(view.helpKey != null ? { helpKey: view.helpKey as string | number } : {}),
                     },
                     required: true,
                     options: [
@@ -426,26 +429,15 @@ export abstract class AbstractFormlyComponent<
                                       },
                                   }
                                 : {}),
-                            ...(view.isCommonWidget != null
-                                ? { isCommonWidget: view.isCommonWidget }
-                                : {}),
-                            ...(view.useDefaultPrefix != null
-                                ? { useDefaultPrefix: view.useDefaultPrefix }
-                                : {}),
+                            ...(view.isCommonWidget != null ? { isCommonWidget: view.isCommonWidget } : {}),
                         },
                     ],
                     onSubmit: (fg: FormGroup) => {
-                        this.applyChanges(
-                            fg,
-                            this.service,
-                            websocket,
-                            view.component ?? null,
-                            view.edge ?? null,
-                        );
+                        this.applyChanges(fg, this.service, websocket, view.component ?? null, view.edge ?? null);
                     },
                 },
             },
-        ];
+        ]);
     }
 
     /**
@@ -455,9 +447,7 @@ export abstract class AbstractFormlyComponent<
      * @param role The Role of the User for this Edge
      * @param translate The Translate-Service
      */
-    protected abstract generateView(
-        viewContext: ViewContext,
-    ): Promise<OeFormlyView<T>> | OeFormlyView<T>;
+    protected abstract generateView(viewContext: ViewContext): Promise<OeFormlyView<T>> | OeFormlyView<T>;
 }
 
 export type ViewContext = Readonly<{
@@ -472,7 +462,6 @@ export type OeFormlyView<T = unknown> = {
     isCommonWidget?: boolean;
     helpKey?: string | null;
     icon?: Icon;
-    useDefaultPrefix?: boolean | null;
     component?: EdgeConfig.Component | null;
     edge?: Edge;
 };
@@ -497,15 +486,12 @@ export type OeFormlyField<T = any> = (
     | OeFormlyField.ButtonFromFormControlLine
     | OeFormlyField.ButtonsFromFormControlLine
     | OeFormlyField.RangeButtonFromFormControlLine
+    | OeFormlyField.DualKnobRangeButtonFromFormControlLine
     | OeFormlyField.RadioButtonsFromFormControlLine
     | OeFormlyField.PercentageBarFromFormControlLine
     | OeFormlyField.ValueLine
     | OeFormlyField.ButtonLine
-    | OeFormlyField.ToggleLine
     | OeFormlyField.ToggleLineWithValue<T>
-    | OeFormlyField.InputLine
-    | OeFormlyField.SelectLine
-    | OeFormlyField.PercentageBarFromFormControlLine
     | OeFormlyField.Advanced.ElectricityMeter
     | OeFormlyField.Advanced.EssChargerLine
     | OeFormlyField.Advanced.AdvancedStatsLine
@@ -518,7 +504,9 @@ export type OeFormlyField<T = any> = (
         | "ion-padding-top"
         | "ion-padding-bottom"
         | "ion-padding-left"
-        | "ion-padding-right";
+        | "ion-padding-right"
+        | "ion-text-font-style-italic"
+        | "ion-padding-top-triple";
     leftColumnWidth?: TIntRange<0, 101>;
 };
 
@@ -549,6 +537,7 @@ export namespace OeFormlyField {
         name?: string | { text: string; lineStyle?: string }[];
         html?: string;
         icon?: Icon;
+        link?: { text: string; href: string };
     };
 
     export type ImageLine = {
@@ -560,6 +549,9 @@ export namespace OeFormlyField {
         type: "component-line";
         component: Type<T>;
         inputs?: Record<string, unknown>;
+
+        /** Will be applied on the wrapper component */
+        componentWrapperCssClass?: string;
     };
 
     export type Item = {
@@ -571,7 +563,8 @@ export namespace OeFormlyField {
 
     export type ChildrenLine = {
         type: "children-line";
-        name: /* actual name string */
+        name:
+            /* actual name string */
             | string
             | /* name string derived from channel value */ {
                   channel: ChannelAddress;
@@ -583,8 +576,7 @@ export namespace OeFormlyField {
 
     export type ChannelLine = {
         type: "channel-line";
-        name: /* actual name string */
-            string | /* name string derived from channel value */ Converter;
+        name: /* actual name string */ string | /* name string derived from channel value */ Converter;
         channel: string;
         filter?: (value: number | null) => boolean;
         converter?: (value: number | null) => string;
@@ -629,15 +621,30 @@ export namespace OeFormlyField {
         buttons: ButtonLabel[];
     };
 
+    export type RangeLineProperties = Partial<{
+        tickMin: number;
+        tickMax: number;
+        tickMaxControlName?: string;
+        tickFormatter?: IonRange["pinFormatter"];
+        unit: "H" | string;
+        keepValue?: boolean; // keeps the value as is without conversion (e.g. / 1000 for kWh or kW)
+        step?: number;
+        pinFormatter: IonRange["pinFormatter"];
+        label?: IonRange["label"];
+        snaps?: boolean;
+    }>;
+
     export type RangeButtonFromFormControlLine = {
         type: "range-button-from-form-control-line";
         controlName: string;
-        properties: Partial<
-            Extract<
-                ModalLineComponent["control"],
-                { type: "RANGE" }
-            >["properties"]
-        >;
+        properties: RangeLineProperties;
+    };
+
+    export type DualKnobRangeButtonFromFormControlLine = {
+        type: "dual-knob-range-button-from-form-control-line";
+        lowerControlName: string;
+        upperControlName: string;
+        properties: RangeLineProperties & { dualKnobs: true };
     };
 
     export type ValueFromFormControlLine = {
@@ -659,9 +666,7 @@ export namespace OeFormlyField {
     };
     export type NameLine = {
         type: "name-line";
-        name:
-            | string
-            | { channel: ChannelAddress; converter: (value: any) => string };
+        name: string | { channel: ChannelAddress; converter: (value: any) => string };
         filter?: Filter;
     };
 
