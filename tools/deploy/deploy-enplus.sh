@@ -35,6 +35,7 @@ INTEGRATION_FEATURES=(
   "feature/shelly3em-energy-registers"
   "feature/dynamic-soc-reserve-estimator"
   "feature/gate-dynamic-reserve-soc"
+  "feature/shelly-pro3em-net-energy-script"
 )
 
 # ---------------------------------------------------------------------------
