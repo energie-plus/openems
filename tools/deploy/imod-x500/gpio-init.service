@@ -1,0 +1,14 @@
+[Unit]
+Description=Set GPIO direction for iMOD/Modberry X500
+# Run before OpenEMS so IO directions are correct at startup.
+# Adjust the unit name below to your actual OpenEMS service.
+Before=openems.service
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/gpio-init.sh
+
+[Install]
+WantedBy=multi-user.target
