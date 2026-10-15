@@ -1,0 +1,44 @@
+= Meter MQTT WhatWatt
+
+Implements an OpenEMS `ElectricityMeter` for a https://whatwatt.de/[whatwatt Go] smart-meter
+adapter, received via MQTT on top of the generic `io.openems.edge.bridge.mqtt` Bridge.
+
+== Payload
+
+The whatwatt Go publishes one flat JSON message per reading, e.g.:
+
+[source,json]
+----
+{
+  "sys_id": "ECC9FF5C46E8",
+  "meter_id": "",
+  "time": "2026-08-18T21:08:50Z",
+  "power_in": 0.604,
+  "power_out": 0,
+  "energy_in": 4751.93,
+  "energy_out": 9462.223,
+  "voltage_l1": 234,
+  "voltage_l2": 235,
+  "voltage_l3": 235
+}
+----
+
+`power_in`/`power_out` are in kW, `energy_in`/`energy_out` are in kWh. Both are totals across all
+three phases - the device does not report per-phase power or energy, only per-phase voltage.
+
+== Design notes
+
+Unlike `io.openems.edge.meter.mqtt.shelly`, this bundle does not build on the
+`io.openems.edge.meter.mqtt.api` (`MqttMeterAdapter`/`MeterSample`) abstraction: that model was
+designed for a single-phase, register-less device (Shelly) and has no room for a full 3-phase
+meter with real cumulative energy registers. This bundle parses its JSON payload directly and
+talks to `io.openems.edge.bridge.mqtt` on its own.
+
+`ActiveConsumptionEnergy`/`ActiveProductionEnergy` are written directly from the device's own
+cumulative meter registers (`energy_in`/`energy_out`) on every message, not integrated from
+instantaneous power like `io.openems.edge.meter.mqtt.shelly` does. This is both simpler and more
+robust against lost MQTT messages, since a later reading is always correct regardless of any gap.
+
+`ActivePowerL1/L2/L3` and the per-phase energy Channels are intentionally left `UNDEFINED`: the
+device only reports a combined total, and evenly splitting it across three phases would fabricate
+a load balance that was never actually measured.
