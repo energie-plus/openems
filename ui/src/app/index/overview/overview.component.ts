@@ -44,6 +44,8 @@ export class OverViewComponent implements ViewWillEnter, OnDestroy {
     private readonly limit: number = 20;
     /** True, if all available edges for this user had been retrieved */
     private limitReached: boolean = false;
+    /** Incremented on every list reset; responses of older generations are discarded */
+    private loadGeneration: number = 0;
 
     private sub: Subscription = new Subscription();
 
@@ -70,12 +72,7 @@ export class OverViewComponent implements ViewWillEnter, OnDestroy {
                         ? [environment.PRODUCT_TYPES(this.translate), SUM_STATES(this.translate)]
                         : []),
                 ]);
-                untracked(() => {
-                    this.loadNextPage().then((edges) => {
-                        this.filteredEdges.set(edges);
-                    });
-                });
-                // this.filteredEdges.set(await this.loadNextPage());
+                untracked(() => this.reloadEdges());
             }
         });
     }
@@ -99,8 +96,15 @@ export class OverViewComponent implements ViewWillEnter, OnDestroy {
     }
 
     ionViewWillEnter() {
-        this.page = 0;
-        this.limitReached = false;
+        // Ionic reuses a cached page instance when navigating back, so the constructor
+        // effect does not run again. The list was cleared in ionViewWillLeave and has to
+        // be reloaded here.
+        if (this.userService.currentUser() != null) {
+            this.reloadEdges();
+        } else {
+            this.page = 0;
+            this.limitReached = false;
+        }
     }
 
     ionViewDidEnter() {
@@ -110,6 +114,7 @@ export class OverViewComponent implements ViewWillEnter, OnDestroy {
     }
 
     ionViewWillLeave() {
+        this.loadGeneration++;
         this.filteredEdges.set([]);
         this.sub?.unsubscribe();
         this.page = 0;
@@ -124,9 +129,14 @@ export class OverViewComponent implements ViewWillEnter, OnDestroy {
      */
     doInfinite(infiniteScroll: InfiniteScrollCustomEvent) {
         setTimeout(() => {
+            const generation = this.loadGeneration;
             this.page++;
             this.loadNextPage()
                 .then((edges) => {
+                    if (generation !== this.loadGeneration) {
+                        infiniteScroll.target.complete();
+                        return;
+                    }
                     this.filteredEdges.update((el) => {
                         el.push(...edges);
                         return el;
@@ -145,6 +155,7 @@ export class OverViewComponent implements ViewWillEnter, OnDestroy {
     }
 
     loadNextPage(): Promise<Edge[]> {
+        const generation = this.loadGeneration;
         this.loading.set(true);
         return new Promise<Edge[]>((resolve, reject) => {
             if (this.limitReached) {
@@ -168,7 +179,9 @@ export class OverViewComponent implements ViewWillEnter, OnDestroy {
             this.service
                 .getEdges(req)
                 .then((edges) => {
-                    this.limitReached = edges.length < this.limit;
+                    if (generation === this.loadGeneration) {
+                        this.limitReached = edges.length < this.limit;
+                    }
                     const user = this.userService.currentUser();
                     // TODO could be applied before calling getEdges
                     if (user != null && !UserPermission.isUserAllowedToSeeOverview(user) && edges.length > 0) {
@@ -182,7 +195,11 @@ export class OverViewComponent implements ViewWillEnter, OnDestroy {
                 .catch((err) => {
                     reject(err);
                 });
-        }).finally(() => this.loading.set(false));
+        }).finally(() => {
+            if (generation === this.loadGeneration) {
+                this.loading.set(false);
+            }
+        });
     }
 
     protected getAndSubscribeEdge(edge: Edge) {
@@ -200,12 +217,27 @@ export class OverViewComponent implements ViewWillEnter, OnDestroy {
         }
 
         this.filteredEdges.set([]);
+        this.reloadEdges();
+    }
 
+    /**
+     * Resets pagination and loads the first page of edges. Responses of
+     * previously started loads are discarded, so only the latest request
+     * fills the list.
+     */
+    private reloadEdges(): void {
+        const generation = ++this.loadGeneration;
         this.page = 0;
         this.limitReached = false;
 
-        this.loadNextPage().then((edges) => {
-            this.filteredEdges.set(edges);
-        });
+        this.loadNextPage()
+            .then((edges) => {
+                if (generation === this.loadGeneration) {
+                    this.filteredEdges.set(edges);
+                }
+            })
+            .catch(() => {
+                // The list stays empty; the next navigation or search triggers a new load
+            });
     }
 }
