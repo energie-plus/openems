@@ -94,6 +94,9 @@ describe("OverviewComponent", () => {
             });
     });
 
+    const originalGetEdges = serviceSpyObject.getEdges;
+    afterEach(() => getEdgesGetter().and.returnValue(originalGetEdges));
+
     it("+loggedInUserCanInstall & ibn-button exists - Global role ADMIN", async () => {
         const button = await getIbnButtonElement(component, fixture, "installer");
         expect(component.loggedInUserCanInstall()).toEqual(true);
@@ -105,6 +108,58 @@ describe("OverviewComponent", () => {
         expect(component.loggedInUserCanInstall()).toEqual(false);
         expect(button).toBeNull();
     });
+
+    it("reloads edges when returning to the cached page", async () => {
+        const edge = DummyConfig.dummyEdge({ edgeId: "edge1", role: Role.ADMIN });
+        mockGetEdges(jasmine.createSpy("getEdges").and.callFake(() => Promise.resolve([edge])));
+
+        component.ionViewWillEnter();
+        await flushPromises();
+        expect(component.filteredEdges()).toEqual([edge]);
+
+        // Ionic keeps the page instance; leaving clears the list
+        component.ionViewWillLeave();
+        expect(component.filteredEdges()).toEqual([]);
+
+        component.ionViewWillEnter();
+        await flushPromises();
+        expect(component.filteredEdges()).toEqual([edge]);
+    });
+
+    it("discards the response of an outdated request", async () => {
+        const outdatedEdge = DummyConfig.dummyEdge({ edgeId: "edge1", role: Role.ADMIN });
+        const currentEdge = DummyConfig.dummyEdge({ edgeId: "edge2", role: Role.ADMIN });
+        let resolveOutdated: (edges: Edge[]) => void = () => {};
+        mockGetEdges(
+            jasmine
+                .createSpy("getEdges")
+                .and.returnValues(new Promise<Edge[]>((resolve) => (resolveOutdated = resolve)), Promise.resolve([currentEdge])),
+        );
+
+        component.ionViewWillEnter();
+        component.ionViewWillEnter();
+        await flushPromises();
+        expect(component.filteredEdges()).toEqual([currentEdge]);
+
+        // The first request answers last and must not overwrite the list
+        resolveOutdated([outdatedEdge]);
+        await flushPromises();
+        expect(component.filteredEdges()).toEqual([currentEdge]);
+    });
+
+    /** getEdges is defined as a property of the service mock, so its getter spy is adjusted */
+    function getEdgesGetter(): jasmine.Spy {
+        return Object.getOwnPropertyDescriptor(serviceSpyObject, "getEdges")!.get as jasmine.Spy;
+    }
+
+    function mockGetEdges(getEdges: jasmine.Spy) {
+        getEdgesGetter().and.returnValue(getEdges);
+    }
+
+    /** Waits until all pending promise callbacks have run */
+    function flushPromises(): Promise<void> {
+        return new Promise((resolve) => setTimeout(resolve));
+    }
 
     async function getIbnButtonElement(
         component: OverViewComponent,
